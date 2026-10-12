@@ -1,0 +1,288 @@
+# Despliegue en AWS (Proyecto 4, F5): el portal de P1-P3 con Capturas Edge en una EC2.
+# Guia y comandos: `Proyecto4/docs/despliegue.md`.
+#
+# Diferencias con `docker-compose.yml` (desarrollo):
+# - Sin volumenes de codigo ni `--reload`: el codigo de P2, P3 y P4 va DENTRO de las
+#   imagenes (etapa `prod` de `docker/Dockerfile`, imagen de P3 tal cual).
+# - Sin llaves de AWS: S3 con el rol de instancia (`P3_AWS_PROFILE` y `P4_AWS_PROFILE`
+#   vacios; boto3 usa IMDSv2, que necesita `HttpPutResponseHopLimit=2` en la EC2).
+# - Ningun servicio publica puertos salvo Caddy (80 y 443): HTTPS y `basic_auth` en todo
+#   menos `POST /api/p4/captures`, que se protege con el token del dispositivo.
+# - MLflow con 1 worker y sin el ejecutor de jobs de GenAI: baja de ~2.3 GiB a ~0.35 GiB
+#   y cabe en una t3.medium (4 GiB). Limites de memoria por servicio.
+#
+# Secretos: `Proyecto2/.env` (app, base de datos, MinIO, token del dispositivo) y
+# `/opt/p4/secretos/caddy.env` (usuario y hash de basic_auth, dominio). Los genera
+# `Proyecto4/deploy/preparar_secretos.sh` en la instancia; ninguno va a Git.
+#
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d
+
+name: p4-portal
+
+services:
+  caddy:
+    image: caddy:2.10.2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - /opt/p4/secretos/caddy.env
+    volumes:
+      - ../Proyecto4/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    mem_limit: 128m
+
+  mariadb:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?falta DB_ROOT_PASSWORD en .env}
+      MARIADB_DATABASE: ${DB_NAME:?falta DB_NAME en .env}
+      MARIADB_USER: ${DB_USER:?falta DB_USER en .env}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en .env}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    mem_limit: 384m
+
+  minio:
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?falta MINIO_ROOT_USER en .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?falta MINIO_ROOT_PASSWORD en .env}
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - minio_data:/data
+    mem_limit: 384m
+
+  minio-init:
+    image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      MINIO_BUCKET_RELEASES: ${MINIO_BUCKET_RELEASES:?falta MINIO_BUCKET_RELEASES en .env}
+      MINIO_BUCKET_DVC_CACHE: ${MINIO_BUCKET_DVC_CACHE:?falta MINIO_BUCKET_DVC_CACHE en .env}
+      MINIO_BUCKET_IMAGES: ${MINIO_BUCKET_IMAGES:?falta MINIO_BUCKET_IMAGES en .env}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$MINIO_BUCKET_RELEASES"
+        mc mb --ignore-existing "local/$$MINIO_BUCKET_DVC_CACHE"
+        mc mb --ignore-existing "local/$$MINIO_BUCKET_IMAGES"
+
+  mcp:
+    image: p4-portal/app:prod
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      APP_ENV: production
+    command: ["python", "-m", "dataset_quality.mcp_server"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=5)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      app-build:
+        condition: service_completed_successfully
+    mem_limit: 256m
+
+  # Construye la imagen de produccion del portal una sola vez (la usan `app` y `mcp`)
+  # y termina: `docker compose build` la deja lista sin arrancar nada.
+  app-build:
+    image: p4-portal/app:prod
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: prod
+      additional_contexts:
+        p3src: ../Proyecto3/src
+        p4src: ../Proyecto4/src
+    command: ["true"]
+    restart: "no"
+
+  app:
+    image: p4-portal/app:prod
+    pull_policy: never
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: "9000"
+      MCP_SERVER_URL: http://mcp:8001/mcp
+      MLFLOW_UI_URL: https://mlflow.${SITE_ADDRESS:?falta SITE_ADDRESS en .env}
+      PYTHONPATH: /app/src:/opt/p3/src:/opt/p4/src
+      P3_MANIFESTS_DIR: /opt/p3/data/manifests
+      P3_CROPS_DIR: /opt/p3/data/crops
+      P3_INFERENCE_URL: http://p3-inference:8010
+      # Rol de instancia: sin perfil, boto3 usa la cadena estandar (IMDSv2).
+      P3_AWS_PROFILE: ""
+      P4_AWS_PROFILE: ""
+    volumes:
+      # Datos de P3 (manifiestos con `dvc pull`, recortes), solo lectura. No es codigo.
+      - ../Proyecto3/data:/opt/p3/data:ro
+    command: ["uvicorn", "dataset_quality.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import sys, urllib.request
+          sys.exit(0 if urllib.request.urlopen("http://localhost:8000/health", timeout=5).status == 200 else 1)
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      mcp:
+        condition: service_healthy
+    mem_limit: 768m
+
+  mlflow-restore:
+    image: ghcr.io/mlflow/mlflow:v3.16.1
+    volumes:
+      - mlflow_data:/mlflow
+      - ../Proyecto3/mlflow_snapshot:/snapshot:ro
+      - ../Proyecto3/src/p3/mlflow_restore.py:/restore.py:ro
+    command: ["python3", "/restore.py", "/snapshot", "/mlflow"]
+    restart: "no"
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.16.1
+    restart: unless-stopped
+    environment:
+      # Los jobs de GenAI de MLflow 3 (huey) no los usa P3 y ocupan ~2 GiB en reposo.
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "false"
+    command:
+      - mlflow
+      - server
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "5000"
+      - --workers
+      - "1"
+      - --backend-store-uri
+      - sqlite:////mlflow/mlflow.db
+      - --artifacts-destination
+      - /mlflow/artifacts
+      - --serve-artifacts
+      - --allowed-hosts
+      - mlflow:*,localhost:*,127.0.0.1:*,mlflow.${SITE_ADDRESS:?falta SITE_ADDRESS en .env}
+    volumes:
+      - mlflow_data:/mlflow
+    depends_on:
+      mlflow-restore:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - |
+          import sys, urllib.request
+          sys.exit(0 if urllib.request.urlopen("http://localhost:5000/health", timeout=5).status == 200 else 1)
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+    mem_limit: 640m
+
+  p3-worker:
+    image: p4-portal/p3:prod
+    build:
+      context: ../Proyecto3
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      P3_DATA_DIR: /data
+      P3_CODE_COMMIT: ${P3_CODE_COMMIT:-unknown}
+      P3_CODE_DIRTY: "false"
+    volumes:
+      - ../Proyecto3/data:/data:ro
+    shm_size: "512mb"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    # Entrenar en la t3.medium no es el objetivo del despliegue: el tope evita que un
+    # entrenamiento deje sin memoria al portal (el kernel mata el worker, no la app).
+    mem_limit: 1536m
+
+  p3-inference:
+    image: p4-portal/p3:prod
+    pull_policy: never
+    restart: unless-stopped
+    command: ["uvicorn", "p3.inference.app:app", "--host", "0.0.0.0", "--port", "8010"]
+    env_file:
+      - .env
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      P3_AWS_PROFILE: ""
+      P3_MODELS_BUCKET: dataset-quality-releases-750702272375
+      P3_MODELS_PREFIX: models/clasificador
+      # P1 no se despliega (decision del PM): "Enviar a cola" de Inference responde 502.
+      P3_ANNOTATION_URL: http://p1-no-desplegado.invalid
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import sys, urllib.request
+          sys.exit(0 if urllib.request.urlopen("http://localhost:8010/health", timeout=5).status == 200 else 1)
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    mem_limit: 1g
+
+volumes:
+  mariadb_data:
+  minio_data:
+  mlflow_data:
+  caddy_data:
+  caddy_config:

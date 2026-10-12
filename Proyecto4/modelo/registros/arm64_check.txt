@@ -1,0 +1,7 @@
+# docker run --cpus 4 --platform linux/arm64 python:3.11-slim-bookworm (QEMU), 2026-10-08
+machine=aarch64 python=3.11.17 onnxruntime=1.30.0 numpy=2.4.6
+model=model_int8.onnx bytes=11349151 sha256=ca689c4e1478ccca7821dffaba8f07886bd9609a8aa3cec7450d9f875fbd69c0
+runtime_ops=DequantizeLinear:2, NhwcMaxPool:1, QGemm:1, QLinearAdd:8, QLinearConv:20, QuantizeLinear:2, ReduceMean:1, Reshape:1, Transpose:2
+dog/0.1.3_a1330.png -> dog [0.063762, 0.930898, 0.00534]
+cat/0.1.3_a1528.png -> cat [0.999977, 1.3e-05, 1.1e-05]
+person/0.1.3_a1022.png -> person [0.002228, 0.004981, 0.992791]

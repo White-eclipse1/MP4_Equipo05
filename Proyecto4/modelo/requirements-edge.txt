@@ -1,0 +1,6 @@
+# Dependencias de inferencia en el dispositivo (Raspberry Pi OS de 64 bits, aarch64).
+# onnxruntime no publica wheels para armv7: el SO de 32 bits no sirve.
+onnxruntime==1.30.0
+onnx==1.23.2
+numpy>=2.2,<2.6
+pillow>=11,<13

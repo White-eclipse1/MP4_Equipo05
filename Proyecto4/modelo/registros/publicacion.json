@@ -1,0 +1,44 @@
+{
+  "variant_version": "1.0.0-int8.1",
+  "bucket": "dataset-quality-releases-750702272375",
+  "prefix": "models/clasificador-edge/1.0.0-int8.1/",
+  "published_at": "2026-10-08T22:45:39+00:00",
+  "objects": [
+    {
+      "key": "models/clasificador-edge/1.0.0-int8.1/model_int8.onnx",
+      "bytes": 11349151,
+      "sha256": "ca689c4e1478ccca7821dffaba8f07886bd9609a8aa3cec7450d9f875fbd69c0",
+      "version_id": "zZUwIi72HXSCv1KEuw2hHmunc1.xdwjt"
+    },
+    {
+      "key": "models/clasificador-edge/1.0.0-int8.1/model_fp32.onnx",
+      "bytes": 44791921,
+      "sha256": "e4dc89bbb652f6de9bea2fffa94ff59abb0e6cb679d8a4d95aeadc9e0be65328",
+      "version_id": "qt0K5n9G3Ksq9jdrtd2OIgiukvzJGior"
+    },
+    {
+      "key": "models/clasificador-edge/1.0.0-int8.1/model_package.json",
+      "bytes": 837,
+      "sha256": "66a45231024b066168a40bd8c75fee97ce808e038af7c2d5f6d112b6510587cc",
+      "version_id": "DEGrD2d.LjvrtN1ww9J.z1XfviGLwzSY"
+    },
+    {
+      "key": "models/clasificador-edge/1.0.0-int8.1/conversion_log.json",
+      "bytes": 3843,
+      "sha256": "3113c9abcc54626a468026f8e92e08aa031f274f069a04466d625d098e4786b5",
+      "version_id": "ihYmquHDelIqf03QbCXfiS0SXQIL7hai"
+    },
+    {
+      "key": "models/clasificador-edge/1.0.0-int8.1/calibracion_manifest.jsonl",
+      "bytes": 24968,
+      "sha256": "1275ffec04ab32c9ad8f589292103c514473cea7166f87a9e2e35aea1e627585",
+      "version_id": "drDmPX_J6GdeenU9hT.M0i3X0I5m9H5s"
+    },
+    {
+      "key": "models/clasificador-edge/1.0.0-int8.1/smoke_test.json",
+      "bytes": 2322,
+      "sha256": "e24b4e08b04e73971a3b7ae45a68fafa571796b08122f2970c9e574c09302916",
+      "version_id": "lLFFsB2TkIzZvIbQP7KJb4.5LGPBEug."
+    }
+  ]
+}

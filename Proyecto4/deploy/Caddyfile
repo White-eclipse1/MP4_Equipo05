@@ -1,0 +1,54 @@
+# Caddy delante del portal desplegado (Proyecto 4, F5). Guia: `Proyecto4/docs/despliegue.md`.
+#
+# - HTTPS automatico con Let's Encrypt para `SITE_ADDRESS` (`<ip-con-guiones>.sslip.io`).
+# - `basic_auth` en TODO el portal: es el acceso limitado del evaluador (decision 6).
+# - Unica excepcion: `POST /api/p4/captures`, que usa el dispositivo y ya exige el
+#   token `P4_DEVICE_TOKEN` (lo valida la app, no Caddy).
+# - `mlflow.SITE_ADDRESS`: la UI de MLflow, con el mismo `basic_auth`.
+#
+# Variables (de `/opt/p4/secretos/caddy.env`, nunca en Git): SITE_ADDRESS,
+# BASIC_AUTH_USER y BASIC_AUTH_HASH (hash bcrypt de `caddy hash-password`).
+
+(seguridad) {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+	log
+}
+
+(evaluador) {
+	basic_auth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+}
+
+{$SITE_ADDRESS} {
+	import seguridad
+
+	@captura_del_dispositivo {
+		method POST
+		path /api/p4/captures
+	}
+	handle @captura_del_dispositivo {
+		# Imagen de hasta 5 MB y evento de hasta 16 KiB (contrato), con margen.
+		request_body {
+			max_size 6MB
+		}
+		reverse_proxy app:8000
+	}
+
+	handle {
+		import evaluador
+		reverse_proxy app:8000
+	}
+}
+
+mlflow.{$SITE_ADDRESS} {
+	import seguridad
+	import evaluador
+	reverse_proxy mlflow:5000
+}

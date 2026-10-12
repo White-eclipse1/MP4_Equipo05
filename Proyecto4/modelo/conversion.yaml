@@ -1,0 +1,36 @@
+# Configuracion de la conversion F2: modelo 1.0.0 del Proyecto 3 -> ONNX INT8.
+# La lee modelo/convert.py; cualquier cambio sube `variant.version`.
+
+source:
+  p3_version: 1.0.0
+  run_id: 9f9b62c202f0446a8a4b411a10321eff
+  sha256: e4acca429ebf73d0e5a60fb0dda383a6a5322dccb1decf04b4e40ab9db989172
+  s3_bucket: dataset-quality-releases-750702272375
+  s3_key: models/clasificador/1.0.0/model.pt
+  s3_version_id: VtRww5se97lomVTcKJUv6d9mYSL7TXOf
+  # Copia local equivalente (dvc pull de Proyecto3/mlflow_snapshot.dvc)
+  local_checkpoint: ../Proyecto3/mlflow_snapshot/artifacts/3/9f9b62c202f0446a8a4b411a10321eff/artifacts/checkpoint/model.pt
+
+variant:
+  version: 1.0.0-int8.1
+  input_name: input
+  output_name: logits
+  opset: 18
+
+quantization:
+  technique: static_post_training_quantization
+  format: QDQ
+  per_channel: true
+  activation_type: QInt8
+  weight_type: QInt8
+  calibrate_method: MinMax
+
+calibration:
+  # Solo la particion de train del manifiesto del P3: validacion y test quedan fuera.
+  manifest: ../Proyecto3/data/manifests/m-0.1.3-s42-1/manifest.jsonl
+  manifest_hash: 45600f297d13f51685e051e0cbc4962beb1f7c6a4e03247cbf61a345e6fa4305
+  crops_dir: ../Proyecto3/data/crops/0.1.3
+  crops_jsonl_sha256: d3d61f35a3efb60e665ac16c95a18f1602df44f3df7c22b86e1c949fadbe1bed
+  split: train
+  samples: 200
+  seed: 42

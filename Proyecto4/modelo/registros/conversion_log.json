@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-08T22:13:54+00:00",
+  "variant_version": "1.0.0-int8.1",
+  "input": {
+    "description": "modelo publicado 1.0.0 del Proyecto 3",
+    "p3_version": "1.0.0",
+    "run_id": "9f9b62c202f0446a8a4b411a10321eff",
+    "sha256": "e4acca429ebf73d0e5a60fb0dda383a6a5322dccb1decf04b4e40ab9db989172",
+    "bytes": 44783563,
+    "s3": "s3://dataset-quality-releases-750702272375/models/clasificador/1.0.0/model.pt",
+    "s3_version_id": "VtRww5se97lomVTcKJUv6d9mYSL7TXOf",
+    "loaded_from": {
+      "origin": "local",
+      "path": "../Proyecto3/mlflow_snapshot/artifacts/3/9f9b62c202f0446a8a4b411a10321eff/artifacts/checkpoint/model.pt"
+    },
+    "architecture": {
+      "name": "resnet18",
+      "hidden_layers": [],
+      "dropout": 0.5,
+      "num_classes": 3,
+      "pretrained_weights": "ResNet18_Weights.IMAGENET1K_V1"
+    },
+    "class_names": [
+      "cat",
+      "dog",
+      "person"
+    ],
+    "preprocessing": {
+      "image_size": 224,
+      "resize": "resize_to_square",
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    }
+  },
+  "outputs": {
+    "fp32": {
+      "file": "model_fp32.onnx",
+      "sha256": "e4dc89bbb652f6de9bea2fffa94ff59abb0e6cb679d8a4d95aeadc9e0be65328",
+      "bytes": 44791921,
+      "graph": {
+        "nodes": 49,
+        "op_types": {
+          "Add": 8,
+          "Conv": 20,
+          "Gemm": 1,
+          "MaxPool": 1,
+          "ReduceMean": 1,
+          "Relu": 17,
+          "Reshape": 1
+        },
+        "initializer_dtypes": {
+          "FLOAT": 42,
+          "INT64": 2
+        },
+        "opset": [
+          {
+            "domain": "ai.onnx",
+            "version": 18
+          }
+        ]
+      }
+    },
+    "int8": {
+      "file": "model_int8.onnx",
+      "sha256": "ca689c4e1478ccca7821dffaba8f07886bd9609a8aa3cec7450d9f875fbd69c0",
+      "bytes": 11349151,
+      "graph": {
+        "nodes": 138,
+        "op_types": {
+          "Add": 8,
+          "Conv": 20,
+          "DequantizeLinear": 74,
+          "Gemm": 1,
+          "MaxPool": 1,
+          "QuantizeLinear": 32,
+          "ReduceMean": 1,
+          "Reshape": 1
+        },
+        "initializer_dtypes": {
+          "FLOAT": 73,
+          "INT32": 42,
+          "INT64": 2,
+          "INT8": 73
+        },
+        "opset": [
+          {
+            "domain": "ai.onnx",
+            "version": 18
+          }
+        ]
+      }
+    }
+  },
+  "technique": {
+    "technique": "static_post_training_quantization",
+    "format": "QDQ",
+    "per_channel": true,
+    "activation_type": "QInt8",
+    "weight_type": "QInt8",
+    "calibrate_method": "MinMax",
+    "calibration_samples": 200,
+    "calibration_split": "train"
+  },
+  "calibration": {
+    "manifest": "modelo/registros/calibracion_manifest.jsonl",
+    "manifest_sha256": "1275ffec04ab32c9ad8f589292103c514473cea7166f87a9e2e35aea1e627585",
+    "source_manifest": "../Proyecto3/data/manifests/m-0.1.3-s42-1/manifest.jsonl",
+    "source_manifest_sha256": "45600f297d13f51685e051e0cbc4962beb1f7c6a4e03247cbf61a345e6fa4305",
+    "seed": 42,
+    "per_class": {
+      "cat": 48,
+      "dog": 54,
+      "person": 98
+    },
+    "splits_used": [
+      "train"
+    ]
+  },
+  "checks": {
+    "fp32_vs_torch_max_abs_logit_diff": 1.1920928955078125e-07
+  },
+  "package": {
+    "file": "model_package.json",
+    "sha256": "66a45231024b066168a40bd8c75fee97ce808e038af7c2d5f6d112b6510587cc"
+  },
+  "environment": {
+    "python": "3.12.10",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "torch": "2.14.0+cpu",
+    "onnx": "1.23.2",
+    "onnxruntime": "1.30.0",
+    "numpy": "2.5.3"
+  },
+  "size_reduction_pct": 74.66
+}

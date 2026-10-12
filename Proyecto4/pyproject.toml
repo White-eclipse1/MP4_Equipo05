@@ -1,0 +1,16 @@
+# Configuracion de pruebas y estilo del codigo de Proyecto 4 (`src/p4`).
+# No es un paquete instalable: el portal monta `src/` en el PYTHONPATH igual que
+# hace con `Proyecto3/src` (ver `Proyecto2/docker-compose.yml`).
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
