@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "tarea": "VAL-01",
+  "verificado_en": "2026-10-14T03:46:22+00:00",
+  "niveles": [
+    "registros"
+  ],
+  "resumen": {
+    "ok": 14,
+    "falla": 0,
+    "pendiente": 1
+  },
+  "linaje_verificado": true,
+  "ficha": {
+    "original": {
+      "version": "1.0.0",
+      "run_id": "9f9b62c202f0446a8a4b411a10321eff",
+      "s3": "s3://dataset-quality-releases-750702272375/models/clasificador/1.0.0/model.pt",
+      "s3_version_id": "VtRww5se97lomVTcKJUv6d9mYSL7TXOf",
+      "mlflow": "mlflow-artifacts:/3/9f9b62c202f0446a8a4b411a10321eff/artifacts/checkpoint/model.pt",
+      "sha256": "e4acca429ebf73d0e5a60fb0dda383a6a5322dccb1decf04b4e40ab9db989172",
+      "bytes": 44783563
+    },
+    "variante": {
+      "version": "1.0.0-int8.1",
+      "s3": "s3://dataset-quality-releases-750702272375/models/clasificador-edge/1.0.0-int8.1/model_int8.onnx",
+      "s3_version_id": "zZUwIi72HXSCv1KEuw2hHmunc1.xdwjt",
+      "sha256": "ca689c4e1478ccca7821dffaba8f07886bd9609a8aa3cec7450d9f875fbd69c0",
+      "bytes": 11349151
+    },
+    "class_map": {
+      "0": "cat",
+      "1": "dog",
+      "2": "person"
+    },
+    "preprocessing": {
+      "image_size": 224,
+      "resize": "resize_to_square",
+      "mean": [
+        0.485,
+        0.456,
+        0.406
+      ],
+      "std": [
+        0.229,
+        0.224,
+        0.225
+      ]
+    },
+    "conversion": {
+      "script": "modelo/convert.py",
+      "config": "modelo/conversion.yaml",
+      "registro": "modelo/registros/conversion_log.json",
+      "registro_sha256": "3113c9abcc54626a468026f8e92e08aa031f274f069a04466d625d098e4786b5"
+    }
+  },
+  "comprobaciones": [
+    {
+      "id": "origen.version",
+      "criterio": "Se identifica model version original 1.0.0",
+      "estado": "ok",
+      "detalle": "conversion.yaml=1.0.0, conversion_log=1.0.0, s3_key=models/clasificador/1.0.0/model.pt"
+    },
+    {
+      "id": "origen.run_id",
+      "criterio": "Se identifica MLflow run_id de origen",
+      "estado": "ok",
+      "detalle": "9f9b62c202f0446a8a4b411a10321eff: igual en conversion.yaml, conversion_log y Proyecto3/docs/selection.json (regla 'max val_accuracy; desempate min val_loss; luego end_time mas temprano', 12 candidatas); evaluacion en test del P3 en Proyecto3/reports/evaluation/9f9b62c202f0446a8a4b411a10321eff/metrics.json"
+    },
+    {
+      "id": "origen.checkpoint",
+      "criterio": "Se identifica checkpoint original",
+      "estado": "ok",
+      "detalle": "MLflow mlflow-artifacts:/3/9f9b62c202f0446a8a4b411a10321eff/artifacts/checkpoint/model.pt; S3 s3://dataset-quality-releases-750702272375/models/clasificador/1.0.0/model.pt (VersionId VtRww5se97lomVTcKJUv6d9mYSL7TXOf); copia DVC ../Proyecto3/mlflow_snapshot/artifacts/3/9f9b62c202f0446a8a4b411a10321eff/artifacts/checkpoint/model.pt"
+    },
+    {
+      "id": "origen.sha256_registros",
+      "criterio": "SHA-256 del modelo original coincide en todas las fuentes",
+      "estado": "ok",
+      "detalle": "e4acca429ebf73d0e5a60fb0dda383a6a5322dccb1decf04b4e40ab9db989172 (44783563 bytes) en conversion.yaml, conversion_log, selection.json del P3, smoke_test.json y la tabla de Proyecto3/docs/publicacion_s3.md (junto con su VersionId y run_id)"
+    },
+    {
+      "id": "variante.version",
+      "criterio": "Se identifica variante 1.0.0-int8.1",
+      "estado": "ok",
+      "detalle": "1.0.0-int8.1 en conversion.yaml, conversion_log, publicacion.json y smoke_test.json; s3://dataset-quality-releases-750702272375/models/clasificador-edge/1.0.0-int8.1/"
+    },
+    {
+      "id": "variante.sha256_registros",
+      "criterio": "SHA-256 de la variante coincide en todas las fuentes",
+      "estado": "ok",
+      "detalle": "model_int8.onnx ca689c4e1478ccca7821dffaba8f07886bd9609a8aa3cec7450d9f875fbd69c0 (11349151 bytes) en conversion_log, publicacion.json (VersionId zZUwIi72HXSCv1KEuw2hHmunc1.xdwjt), smoke_test.json y arm64_check.txt"
+    },
+    {
+      "id": "clases.orden",
+      "criterio": "Se conserva class order: cat, dog, person",
+      "estado": "ok",
+      "detalle": "Proyecto3/config/classes.yaml=['cat', 'dog', 'person']; checkpoint (conversion_log)=['cat', 'dog', 'person']; num_classes=3"
+    },
+    {
+      "id": "preprocesamiento",
+      "criterio": "Se conserva preprocessing requerido",
+      "estado": "ok",
+      "detalle": "checkpoint: 224x224 resize_to_square, mean [0.485, 0.456, 0.406], std [0.229, 0.224, 0.225]; igual a EVAL_RESIZE/IMAGENET_MEAN/IMAGENET_STD de Proyecto3/src/p3/data/transforms.py y a IMAGE_SIZE/MEAN/STD de modelo/preprocess.py (RGB, bilineal)"
+    },
+    {
+      "id": "conversion.referencia",
+      "criterio": "Se conserva referencia al script/configuracion de conversion",
+      "estado": "ok",
+      "detalle": "modelo/convert.py (lee modelo/conversion.yaml por defecto) + modelo/requirements-conversion.lock.txt; la tecnica del registro (static_post_training_quantization, QDQ, per_channel=True) es la de conversion.yaml"
+    },
+    {
+      "id": "conversion.entrada_salida",
+      "criterio": "El registro de conversion identifica input y output",
+      "estado": "ok",
+      "detalle": "input: s3://dataset-quality-releases-750702272375/models/clasificador/1.0.0/model.pt sha256 e4acca429ebf...; outputs: model_fp32.onnx e4dc89bbb652..., model_int8.onnx ca689c4e1478..."
+    },
+    {
+      "id": "registros.publicados",
+      "criterio": "Los registros en Git son byte a byte los publicados en S3",
+      "estado": "ok",
+      "detalle": "conversion_log.json, calibracion_manifest.jsonl y smoke_test.json tienen el SHA-256 de publicacion.json"
+    },
+    {
+      "id": "paquete.reconstruido",
+      "criterio": "model_package.json publicado se reconstruye desde conversion_log",
+      "estado": "ok",
+      "detalle": "SHA-256 reconstruido 66a45231024b066168a40bd8c75fee97ce808e038af7c2d5f6d112b6510587cc (finales de linea '\\r\\n') igual a conversion_log.package y publicacion.json: el paquete que lee el dispositivo declara exactamente esas clases y ese preprocesamiento"
+    },
+    {
+      "id": "calibracion.train",
+      "criterio": "Calibracion solo con train del manifiesto del P3 seleccionado",
+      "estado": "ok",
+      "detalle": "200 recortes, todos de train ({'person': 98, 'dog': 54, 'cat': 48}); manifiesto m-0.1.3-s42-1 45600f297d13..., el mismo con el que se entreno el modelo seleccionado"
+    },
+    {
+      "id": "origen.no_externo",
+      "criterio": "No se sustituye el modelo del equipo por un modelo externo",
+      "estado": "ok",
+      "detalle": "convert.py carga el checkpoint con load_checkpoint del P3 y se detiene si su SHA-256 no es el de conversion.yaml; arquitectura resnet18 del P3; ONNX FP32 igual a PyTorch (max |dlogit| 1.2e-07)"
+    },
+    {
+      "id": "binarios.sha256",
+      "criterio": "SHA-256 recalculado sobre los binarios (model.pt y model_int8.onnx)",
+      "estado": "pendiente",
+      "detalle": "este nivel solo lee registros; correr con --profile <perfil del equipo> o --local"
+    }
+  ],
+  "entorno": {
+    "python": "3.11.9",
+    "platform": "Windows-10-10.0.26300-SP0"
+  }
+}

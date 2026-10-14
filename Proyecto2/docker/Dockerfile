@@ -15,7 +15,7 @@ RUN npx vite build --outDir /web/dist --emptyOutDir
 
 # --- Etapa 2: la aplicacion --------------------------------------------------
 # `app` es la imagen de desarrollo y de CI: compose la pide con `target: app` y
-# monta encima el codigo de P2, P3 y P4 para recargar en caliente.
+# monta encima el codigo de P2 y P3 para recargar en caliente.
 FROM python:3.12-slim AS app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -70,18 +70,3 @@ EXPOSE 8000
 
 CMD ["uvicorn", "dataset_quality.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
-
-# --- Etapa 3: produccion (Proyecto 4, F5) -------------------------------------
-# La misma imagen `app` con el codigo de P3 y P4 DENTRO, para el despliegue en
-# AWS (`docker-compose.prod.yml`): en produccion no hay volumenes de codigo. P3 y
-# P4 viven fuera del contexto de este Dockerfile, asi que llegan como contextos
-# con nombre (`additional_contexts` en compose): `p3src` y `p4src`.
-#
-# Tambien se copian `reports/` (los artefactos versionados que leen Overview,
-# Analyzers, Splits y Versions): en desarrollo llegan con el montaje del repo.
-FROM app AS prod
-
-COPY --chown=appuser:appuser reports ./reports
-COPY --from=p3src --chown=appuser:appuser . /opt/p3/src
-COPY --from=p4src --chown=appuser:appuser . /opt/p4/src
-ENV PYTHONPATH=/app/src:/opt/p3/src:/opt/p4/src

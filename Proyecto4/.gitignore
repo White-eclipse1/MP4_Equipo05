@@ -1,4 +1,4 @@
-# Secretos y credenciales
+# Secretos y credenciales: nunca en Git
 .env
 .env.*
 !.env.example
@@ -7,30 +7,18 @@
 credentials
 .aws/
 
-# Pesos y artefactos de modelo: se distribuyen por enlace con SHA-256 (ver docs/decisiones.md)
+# Pesos y artefactos de modelo: se distribuyen por enlace con SHA-256
 *.pt
 *.pth
 *.onnx
 *.tflite
-*.engine
-*.pb
-*.h5
-*.keras
-*.mlmodel
-*.safetensors
-# Salida local de modelo/convert.py (se publica en S3, ver docs/artefacto.md)
-/artifacts/
 
-# Capturas locales del dispositivo y paquetes de evidencias
+# Capturas locales del dispositivo
 capturas/
-evidencias/*.zip
-*.zip
 
 # Python
 __pycache__/
 *.pyc
 .venv/
-venv/
-
-# Sistema
-.DS_Store
+.pytest_cache/
+.ruff_cache/

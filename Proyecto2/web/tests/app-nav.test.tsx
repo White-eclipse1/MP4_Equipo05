@@ -27,24 +27,3 @@ describe('navegación del portal con las páginas de P3', () => {
     }
   });
 });
-
-describe('navegación del portal con Capturas Edge (P4, decisión 6)', () => {
-  it('abre Capturas Edge desde el menú, entre Inference y Settings', async () => {
-    const user = userEvent.setup();
-    const { container } = render(<App />);
-    const labels = Array.from(container.querySelectorAll('.nav .label')).map(
-      (label) => label.textContent,
-    );
-    expect(labels.slice(labels.indexOf('Inference'))).toEqual([
-      'Inference',
-      'Capturas Edge',
-      'Settings',
-    ]);
-
-    await user.click(screen.getByRole('button', { name: /Capturas Edge/ }));
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Capturas Edge' }),
-    ).toBeInTheDocument();
-    expect(window.location.hash).toBe('#/edge-captures');
-  });
-});

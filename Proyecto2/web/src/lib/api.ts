@@ -571,50 +571,6 @@ export interface AnnotationQueueItem {
 }
 
 /** Error que conserva el mensaje de la API, no un `fetch failed` generico. */
-// ============================================================================
-// Proyecto 4: Capturas Edge. Espejo del contrato `schema_version` 1
-// (`Proyecto4/docs/contratos.md`); la API vive bajo `/api/p4/` en la misma app.
-// ============================================================================
-
-/** Región clasificada, en píxeles de la fotografía. */
-export interface EdgeCaptureRegion {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-/** Registro guardado en S3: el evento del dispositivo más los campos del receptor. */
-export interface EdgeCapture {
-  schema_version: 1;
-  capture_id: string;
-  /** ISO 8601 con el offset del dispositivo. */
-  captured_at: string;
-  predicted_class: string;
-  confidence: number;
-  device_id: string;
-  model_version: string;
-  model_sha256: string;
-  image_ref: string;
-  image_sha256: string;
-  region: EdgeCaptureRegion | null;
-  /** ISO 8601 en UTC (`+00:00`). */
-  received_at: string;
-  image_key: string;
-  image_bytes: number;
-  image_width: number;
-  image_height: number;
-  delivery_delay_s: number;
-  warnings: string[];
-}
-
-/** `GET /api/p4/captures`: de más reciente a más antigua; `errores` = registros ilegibles. */
-export interface EdgeCapturesResponse {
-  items: EdgeCapture[];
-  total: number;
-  errores: { record_key: string; problema: string }[];
-}
-
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -661,9 +617,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     let detail: unknown;
     try {
-      // FastAPI responde `{detail}`; el receptor de P4, `{error, mensaje, detalles}`.
-      const body = (await response.json()) as { detail?: unknown; mensaje?: unknown };
-      detail = body.detail ?? body.mensaje;
+      const body = (await response.json()) as { detail?: unknown };
+      detail = body.detail;
     } catch {
       // La respuesta no era JSON: nos quedamos con el codigo de estado.
     }
@@ -775,16 +730,6 @@ export const api = {
         `/api/p3/inference/${encodeURIComponent(inferenceId)}/send-to-annotation`,
         { method: 'POST' },
       ),
-  },
-
-  /** Capturas Edge (Proyecto 4), bajo `/api/p4/captures`. Solo lectura desde el portal. */
-  p4: {
-    captures: (limit = 100) =>
-      request<EdgeCapturesResponse>(`/api/p4/captures?limit=${limit}`),
-    /** URL de la fotografía: la lee el servidor de S3; el navegador no recibe URLs de S3. */
-    captureImageUrl: (captureId: string) =>
-      `/api/p4/captures/${encodeURIComponent(captureId)}/image`,
-    exportUrl: (format: 'csv' | 'json') => `/api/p4/captures/export?format=${format}`,
   },
 };
 
