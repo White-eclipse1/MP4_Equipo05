@@ -8,7 +8,6 @@
 import { useEffect, useState } from 'react';
 import Analyzers from './pages/Analyzers';
 import Copilot from './pages/Copilot';
-import EdgeCaptures from './pages/EdgeCaptures';
 import Evaluation from './pages/Evaluation';
 import Experiments from './pages/Experiments';
 import Exploration from './pages/Exploration';
@@ -20,7 +19,7 @@ import Splits from './pages/Splits';
 import Training from './pages/Training';
 import Versions from './pages/Versions';
 
-// Las páginas de P3 (clasificador) y Capturas Edge de P4 se suman a la navegación
+// Las páginas de P3 (clasificador) se suman a la navegación
 // de P2: es el mismo portal. Van agrupadas tras las de calidad y antes de Settings, que queda al
 // final. El router por hash de más abajo no cambia: solo crece esta lista.
 const PAGES = [
@@ -35,8 +34,6 @@ const PAGES = [
   { id: 'evaluation', label: 'Evaluation', glyph: '✓', element: <Evaluation /> },
   { id: 'models', label: 'Models', glyph: '◆', element: <Models /> },
   { id: 'inference', label: 'Inference', glyph: '➤', element: <Inference /> },
-  // Proyecto 4 (F5, decisión 6): capturas del dispositivo edge guardadas en S3.
-  { id: 'edge-captures', label: 'Capturas Edge', glyph: '◎', element: <EdgeCaptures /> },
   { id: 'settings', label: 'Settings', glyph: '⚙', element: <Settings /> },
 ] as const;
 

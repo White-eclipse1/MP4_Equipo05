@@ -77,8 +77,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-      # La etapa `prod` (con P3 y P4 dentro) es solo para `docker-compose.prod.yml`.
-      target: app
     container_name: dq_mcp
     restart: unless-stopped
     environment:
@@ -99,7 +97,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
-      target: app
     container_name: dq_app
     restart: unless-stopped
     env_file:
@@ -134,14 +131,7 @@ services:
       MLFLOW_UI_URL: ${MLFLOW_UI_URL:-http://localhost:${MLFLOW_PORT:-5000}}
       # Proyecto 3 vive en el mismo portal: su paquete `p3` se monta en
       # `/opt/p3/src` (ver `volumes`) y la app monta su router `/api/p3/...`.
-      # Proyecto 4 igual: `p4` en `/opt/p4/src` y su router `/api/p4/captures`.
-      PYTHONPATH: /app/src:/opt/p3/src:/opt/p4/src
-      # Credenciales de S3 para Capturas Edge (P4), SOLO en desarrollo local: el
-      # `~/.aws` del host montado en solo lectura (ver `volumes`) y el perfil
-      # `P4_AWS_PROFILE` de `.env`. Con `P4_AWS_PROFILE` vacio boto3 usa su
-      # cadena estandar (rol de instancia en el despliegue).
-      AWS_CONFIG_FILE: /aws/config
-      AWS_SHARED_CREDENTIALS_FILE: /aws/credentials
+      PYTHONPATH: /app/src:/opt/p3/src
       P3_MANIFESTS_DIR: /opt/p3/data/manifests
       P3_CROPS_DIR: /opt/p3/data/crops
     ports:
@@ -166,12 +156,6 @@ services:
       # El codigo de Proyecto 3, en solo lectura y fuera de `/app/src` para no
       # crear un punto de montaje dentro del arbol de Proyecto2.
       - ../Proyecto3/src:/opt/p3/src:ro
-      # El codigo de Proyecto 4 (recepcion de Capturas Edge), igual que el de P3.
-      - ../Proyecto4/src:/opt/p4/src:ro
-      # `~/.aws` en solo lectura para P4 (lo exporta `scripts/up.py` como en
-      # `p3-inference`). Sin el, se monta una carpeta sin credenciales y el
-      # receptor responde 503 al escribir en S3.
-      - ${P3_AWS_DIR:-../Proyecto3/docker}:/aws:ro
       # Los datos de P3, en solo lectura, como el worker: manifiestos de F3
       # (`/api/p3/manifests`) y recortes de F2 (miniaturas de Evaluation). Se
       # monta `data/` entera porque existe en Git: montar `data/crops`, que no
@@ -194,8 +178,6 @@ services:
       - /app/src
       - --reload-dir
       - /opt/p3/src
-      - --reload-dir
-      - /opt/p4/src
     healthcheck:
       test:
         - CMD
