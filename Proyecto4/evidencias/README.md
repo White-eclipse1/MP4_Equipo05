@@ -16,7 +16,7 @@
 | Capturas de operación (20 eventos repartidos entre las clases) | ⏳ Omar, EDGE-07; exportación desde el portal (`/api/p4/capturas/exportar?formato=csv`) | ⏳ |
 | Evidencia de AWS | [`../docs/despliegue.md`](../docs/despliegue.md), [`../docs/acceso-evaluacion.md`](../docs/acceso-evaluacion.md), [`../scripts/consultar_captura.py`](../scripts/consultar_captura.py) | ✅ falta con capturas reales |
 | Acceso al portal | https://54-80-197-58.sslip.io → Capturas Edge, usuario `evaluador` | ✅ |
-| Demostración funcional | ⏳ guion y simulacro (INT-08, EDGE-08) | ⏳ |
+| Demostración funcional | Guion: [`../docs/guion-demo.md`](../docs/guion-demo.md); ⏳ simulacro con el dispositivo (INT-08, EDGE-08) | ⏳ |
 | Video opcional | ⏳ | ⏳ |
 
 ## Requisitos mínimos

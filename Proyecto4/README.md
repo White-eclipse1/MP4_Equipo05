@@ -109,6 +109,10 @@ Instalación, recursos creados y operación por Session Manager: [`docs/desplieg
 | Pruebas automáticas del receptor | `pytest` en `Proyecto4/` (CI: `p4-ci.yml`) | ✅ |
 | Inferencia en entradas conocidas en el dispositivo | ⏳ VAL-07 / EDGE-03 | ⏳ |
 
+## Demostración
+
+Guion paso a paso, con roles, comandos y qué hacer si algo falla: [`docs/guion-demo.md`](docs/guion-demo.md).
+
 ## Evidencias
 
 Índice completo en [`evidencias/README.md`](evidencias/README.md).
