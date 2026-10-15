@@ -44,6 +44,15 @@ aws s3api head-object --bucket p4-capturas-474665692638 --key edge-capturas/even
 aws s3api list-object-versions --bucket p4-capturas-474665692638 --prefix edge-capturas/eventos/<id>.json --profile p4-equipo --region us-east-1
 ```
 
+## Usuario de solo lectura para la demostración (`p4-lectura`)
+
+Desde el 15 de octubre existe el usuario IAM `p4-lectura`, para hacer la consulta en vivo con una identidad que **no puede escribir ni borrar**.
+
+- **Permisos:** solo [`deploy/politica-evaluador.json`](../deploy/politica-evaluador.json) (leer `edge-capturas/`, `modelos/` y `models/`) y la política de AWS `SignInLocalDevelopmentAccess`, para usar `aws login`. El simulador de IAM confirma escritura, borrado, Parameter Store, EC2 e IAM denegados; un `PutObject` real respondió `AccessDenied`.
+- **Credenciales:** sin llaves de acceso. Tiene contraseña de consola, elegida por el equipo y guardada fuera del repo y del chat.
+- **Uso:** `aws login --profile p4-lectura` y luego `consultar_captura.py <capture_id> --profile p4-lectura`.
+- **Al terminar la evaluación:** se borra el usuario.
+
 ## Si el evaluador pide acceso propio a AWS (temporal)
 
 La rúbrica no lo exige: basta la consulta en vivo. Si se pide:

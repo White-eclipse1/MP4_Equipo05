@@ -1,4 +1,4 @@
-1. Consulta como: arn:aws:iam::474665692638:root
+1. Consulta como: arn:aws:iam::474665692638:user/p4-lectura
 
 2. Registro s3://p4-capturas-474665692638/edge-capturas/eventos/prueba-int-20261015T164022-0001.json
    VersionId HUw1H2f3RY85bJst6kQyobzDXV_x4CcN  LastModified 2026-10-15T22:40:26+00:00

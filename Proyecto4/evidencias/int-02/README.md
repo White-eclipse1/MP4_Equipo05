@@ -34,7 +34,7 @@ El token real ahora solo se envía a la URL del receptor desplegado: con otra `-
 
 ## Persistencia en AWS ([`consulta-s3.txt`](consulta-s3.txt))
 
-Consulta de solo lectura con [`scripts/consultar_captura.py`](../../scripts/consultar_captura.py) sobre `prueba-int-20261015T164022-0001`:
+Consulta con [`scripts/consultar_captura.py`](../../scripts/consultar_captura.py) sobre `prueba-int-20261015T164022-0001`, hecha con el usuario IAM de **solo lectura** `p4-lectura` (no con root). Sus permisos solo permiten leer `edge-capturas/`, `modelos/` y `models/`. El intento de escritura con ese mismo perfil fue denegado ([`escritura-denegada.txt`](escritura-denegada.txt)):
 
 | Objeto | Detalle |
 |---|---|
