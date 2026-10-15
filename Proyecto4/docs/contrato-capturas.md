@@ -47,7 +47,7 @@ Los errores siempre tienen la forma `{"error": "<código>", "detail": "<mensaje>
 | Falta `evento` o `foto`, multipart roto, JSON inválido | 400 | `solicitud_invalida` | No |
 | Token ausente o incorrecto | 401 | `no_autorizado` | No |
 | `evento` de más de 16 KiB / foto de más de 5 MB | 413 | `evento_demasiado_grande` / `foto_demasiado_grande` | No |
-| La foto no es un JPEG legible | 415 | `foto_no_soportada` | No |
+| La foto no es un JPEG legible o declara más de 40 millones de píxeles | 415 | `foto_no_soportada` | No |
 | Evento que no cumple la tabla | 422 | `evento_invalido`; `detalles` trae **todos** los campos con problema | No |
 | Receptor sin token configurado | 503 | `receptor_no_configurado` | Sí, con el mismo evento |
 | Almacén (S3) caído o sin configurar | 503 | `almacen_no_disponible` | Sí, con el mismo evento |
@@ -76,7 +76,7 @@ Respuesta de éxito (201 o 200):
 
 | Endpoint | Qué devuelve |
 |---|---|
-| `GET /api/p4/capturas?limite=N` | `{items, total, errores}`, de más reciente a más antigua por `captured_at` en UTC. `errores` lista registros ilegibles: no se esconden |
+| `GET /api/p4/capturas?limite=N` | `{items, total, errores}`, de más reciente a más antigua por `captured_at` en UTC. `errores` lista los registros ilegibles o sin fecha válida: no se esconden ni tumban el listado |
 | `GET /api/p4/capturas/{capture_id}` | Un registro (404 si no existe) |
 | `GET /api/p4/capturas/{capture_id}/foto` | La foto, leída del almacén por el servidor |
 | `GET /api/p4/capturas/exportar?formato=csv\|json` | Todos los eventos; en CSV, `region` va en `region_x`, `region_y`, `region_width`, `region_height` |

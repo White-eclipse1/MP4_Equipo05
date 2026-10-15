@@ -116,3 +116,24 @@ def test_almacen_no_configurado_responde_503_en_todo(config):
             "detail": "El receptor no tiene P4_BUCKET configurado",
             "detalles": [],
         }
+
+
+def test_registro_con_fecha_invalida_no_tumba_el_listado_ni_la_exportacion(cliente, almacen):
+    cargar(cliente)
+    # Un registro que llego a S3 por fuera del receptor, con captured_at sin zona.
+    roto = {**almacen.obtener("edge01-a"), "capture_id": "edge01-roto"}
+    roto["captured_at"] = "2026-10-15T10:00:00"
+    almacen._registros["edge01-roto"] = roto
+    sin_fecha = {k: v for k, v in roto.items() if k != "captured_at"}
+    almacen._registros["edge01-sin-fecha"] = {**sin_fecha, "capture_id": "edge01-sin-fecha"}
+
+    listado = cliente.get("/api/p4/capturas")
+    assert listado.status_code == 200
+    cuerpo = listado.json()
+    assert [i["capture_id"] for i in cuerpo["items"]] == ["edge01-b", "edge01-a", "edge01-c"]
+    assert sorted(e["llave"] for e in cuerpo["errores"]) == ["edge01-roto", "edge01-sin-fecha"]
+
+    for formato in ("csv", "json"):
+        exportacion = cliente.get(f"/api/p4/capturas/exportar?formato={formato}")
+        assert exportacion.status_code == 200
+        assert exportacion.headers["x-capturas-con-error"] == "2"

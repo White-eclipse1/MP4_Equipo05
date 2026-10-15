@@ -36,14 +36,14 @@ from p4.capturas.almacen import (
     Almacen,
     AlmacenAusente,
     AlmacenMemoria,
-    AlmacenNoDisponible,
+    AlmacenNoDisponibleError,
     AlmacenS3,
-    CapturaNoEncontrada,
-    ConflictoCaptura,
+    CapturaNoEncontradaError,
+    ConflictoCapturaError,
     llave_registro,
 )
 from p4.capturas.config import ConfigCapturas, obtener_config
-from p4.capturas.errores import ErrorCaptura
+from p4.capturas.errores import CapturaError
 from p4.capturas.evento import PATRON_ID, leer_evento, validar_evento
 from p4.capturas.foto import inspeccionar_foto
 
@@ -102,7 +102,7 @@ AlmacenDep = Annotated[Almacen, Depends(obtener_almacen)]
 
 def revisar_token(cabecera: str | None, config: ConfigCapturas) -> None:
     if config.token_dispositivo is None:
-        raise ErrorCaptura(
+        raise CapturaError(
             503,
             "receptor_no_configurado",
             "El receptor no tiene P4_TOKEN_DISPOSITIVO configurado; no acepta envios",
@@ -110,13 +110,11 @@ def revisar_token(cabecera: str | None, config: ConfigCapturas) -> None:
     esquema, _, token = (cabecera or "").partition(" ")
     esperado = config.token_dispositivo.get_secret_value()
     if esquema.lower() != "bearer" or not hmac.compare_digest(token.encode(), esperado.encode()):
-        raise ErrorCaptura(401, "no_autorizado", "Falta el token del dispositivo o no es valido")
+        raise CapturaError(401, "no_autorizado", "Falta el token del dispositivo o no es valido")
 
 
-def _evento_grande(maximo: int) -> ErrorCaptura:
-    return ErrorCaptura(
-        413, "evento_demasiado_grande", f"La parte 'evento' pasa de {maximo} bytes"
-    )
+def _evento_grande(maximo: int) -> CapturaError:
+    return CapturaError(413, "evento_demasiado_grande", f"La parte 'evento' pasa de {maximo} bytes")
 
 
 async def leer_partes(request: Request, config: ConfigCapturas) -> tuple[str, bytes]:
@@ -129,16 +127,16 @@ async def leer_partes(request: Request, config: ConfigCapturas) -> tuple[str, by
         motivo = str(getattr(error, "message", None) or getattr(error, "detail", error))
         if "maximum size" in motivo:
             raise _evento_grande(config.max_evento_bytes) from error
-        raise ErrorCaptura(
+        raise CapturaError(
             400, "solicitud_invalida", f"El cuerpo no es multipart valido: {motivo}"
         ) from error
     evento, foto = formulario.get("evento"), formulario.get("foto")
     if evento is None:
-        raise ErrorCaptura(400, "solicitud_invalida", "Falta la parte 'evento'")
+        raise CapturaError(400, "solicitud_invalida", "Falta la parte 'evento'")
     if foto is None:
-        raise ErrorCaptura(400, "solicitud_invalida", "Falta la parte 'foto'")
+        raise CapturaError(400, "solicitud_invalida", "Falta la parte 'foto'")
     if not isinstance(foto, UploadFile):
-        raise ErrorCaptura(400, "solicitud_invalida", "La parte 'foto' debe ser un archivo")
+        raise CapturaError(400, "solicitud_invalida", "La parte 'foto' debe ser un archivo")
     # Un byte de mas basta para saber si pasa del tope sin cargar archivos enormes.
     datos = await foto.read(config.max_foto_bytes + 1)
     if isinstance(evento, UploadFile):
@@ -150,9 +148,7 @@ async def leer_partes(request: Request, config: ConfigCapturas) -> tuple[str, by
 
 
 @router.post("", status_code=201)
-async def recibir_captura(
-    request: Request, config: ConfigDep, almacen: AlmacenDep
-) -> JSONResponse:
+async def recibir_captura(request: Request, config: ConfigDep, almacen: AlmacenDep) -> JSONResponse:
     try:
         revisar_token(request.headers.get("authorization"), config)
         texto, datos = await leer_partes(request, config)
@@ -160,17 +156,17 @@ async def recibir_captura(
         evento = leer_evento(texto)
         validar_evento(evento, foto, config)
         guardado = await run_in_threadpool(almacen.guardar, evento, foto, ahora())
-    except ErrorCaptura as error:
+    except CapturaError as error:
         return error.respuesta()
-    except ConflictoCaptura as error:
-        return ErrorCaptura(
+    except ConflictoCapturaError as error:
+        return CapturaError(
             409,
             "conflicto_capture_id",
             "El capture_id ya existe con otros datos; no se sobrescribe",
             error.diferencias,
         ).respuesta()
-    except AlmacenNoDisponible as error:
-        return ErrorCaptura(503, "almacen_no_disponible", str(error)).respuesta()
+    except AlmacenNoDisponibleError as error:
+        return CapturaError(503, "almacen_no_disponible", str(error)).respuesta()
 
     registro = guardado.registro
     return JSONResponse(
@@ -189,10 +185,10 @@ async def _leer(funcion: Callable[..., Any], *argumentos: Any) -> Any:
     """Corre una lectura del almacen y traduce sus fallas al formato de error."""
     try:
         return await run_in_threadpool(funcion, *argumentos)
-    except CapturaNoEncontrada as error:
-        raise ErrorCaptura(404, "captura_no_encontrada", f"No existe la captura {error}") from error
-    except AlmacenNoDisponible as error:
-        raise ErrorCaptura(503, "almacen_no_disponible", str(error)) from error
+    except CapturaNoEncontradaError as error:
+        raise CapturaError(404, "captura_no_encontrada", f"No existe la captura {error}") from error
+    except AlmacenNoDisponibleError as error:
+        raise CapturaError(503, "almacen_no_disponible", str(error)) from error
 
 
 @router.get("")
@@ -202,9 +198,10 @@ async def listar_capturas(
     """Capturas de mas reciente a mas antigua (`captured_at` en UTC)."""
     try:
         registros, errores = await _leer(almacen.listar)
-    except ErrorCaptura as error:
+    except CapturaError as error:
         return error.respuesta()
-    ordenados = exportar.ordenar(registros)
+    ordenados, sin_orden = exportar.ordenar(registros)
+    errores = [*errores, *sin_orden]
     return JSONResponse({"items": ordenados[:limite], "total": len(ordenados), "errores": errores})
 
 
@@ -216,10 +213,11 @@ async def exportar_capturas(
     """Todos los eventos con los campos del contrato y los del receptor."""
     try:
         registros, errores = await _leer(almacen.listar)
-    except ErrorCaptura as error:
+    except CapturaError as error:
         return error.respuesta()
     momento = ahora()
-    ordenados = exportar.ordenar(registros)
+    ordenados, sin_orden = exportar.ordenar(registros)
+    errores = [*errores, *sin_orden]
     cabeceras = {
         "Content-Disposition": (
             f'attachment; filename="{exportar.nombre_archivo(momento, formato)}"'
@@ -240,7 +238,7 @@ async def exportar_capturas(
 async def obtener_captura(capture_id: IdCaptura, almacen: AlmacenDep) -> JSONResponse:
     try:
         return JSONResponse(await _leer(almacen.obtener, capture_id))
-    except ErrorCaptura as error:
+    except CapturaError as error:
         return error.respuesta()
 
 
@@ -249,6 +247,8 @@ async def obtener_foto(capture_id: IdCaptura, almacen: AlmacenDep) -> Response:
     """La foto, leida del almacen por el servidor: el navegador no recibe URLs de S3."""
     try:
         datos = await _leer(almacen.foto, capture_id)
-    except ErrorCaptura as error:
+    except CapturaError as error:
         return error.respuesta()
-    return Response(datos, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"})
+    return Response(
+        datos, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=300"}
+    )

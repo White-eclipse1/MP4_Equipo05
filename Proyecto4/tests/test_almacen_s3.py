@@ -12,10 +12,10 @@ from botocore.stub import ANY, Stubber
 
 from conftest import RECIBIDO, evento_valido, jpeg
 from p4.capturas.almacen import (
-    AlmacenNoDisponible,
+    AlmacenNoDisponibleError,
     AlmacenS3,
-    CapturaNoEncontrada,
-    ConflictoCaptura,
+    CapturaNoEncontradaError,
+    ConflictoCapturaError,
 )
 from p4.capturas.evento import EventoCaptura
 from p4.capturas.foto import inspeccionar_foto
@@ -104,7 +104,7 @@ def test_otra_foto_con_el_mismo_id_es_conflicto(almacen, s3):
     almacen.guardar(EVENTO, FOTO, RECIBIDO)
     otra = inspeccionar_foto(jpeg(color=(0, 0, 0)), 1_000_000)
     evento = EventoCaptura.model_validate(evento_valido(otra.datos))
-    with pytest.raises(ConflictoCaptura) as conflicto:
+    with pytest.raises(ConflictoCapturaError) as conflicto:
         almacen.guardar(evento, otra, RECIBIDO)
     assert conflicto.value.diferencias[0]["campo"] == "image_sha256"
     assert s3.objetos[FOTO_KEY].cuerpo == FOTO.datos
@@ -113,7 +113,7 @@ def test_otra_foto_con_el_mismo_id_es_conflicto(almacen, s3):
 def test_otros_datos_con_el_mismo_id_es_conflicto(almacen, s3):
     almacen.guardar(EVENTO, FOTO, RECIBIDO)
     evento = EventoCaptura.model_validate(evento_valido(FOTO.datos, confidence=0.5))
-    with pytest.raises(ConflictoCaptura) as conflicto:
+    with pytest.raises(ConflictoCapturaError) as conflicto:
         almacen.guardar(evento, FOTO, RECIBIDO)
     assert conflicto.value.diferencias == [
         {"campo": "confidence", "guardado": 0.93, "recibido": 0.5}
@@ -123,7 +123,7 @@ def test_otros_datos_con_el_mismo_id_es_conflicto(almacen, s3):
 
 def test_falla_a_la_mitad_se_completa_con_el_reintento(almacen, s3):
     s3.fallar_llave[REG_KEY] = error_s3("InternalError", 500, "PutObject")
-    with pytest.raises(AlmacenNoDisponible):
+    with pytest.raises(AlmacenNoDisponibleError):
         almacen.guardar(EVENTO, FOTO, RECIBIDO)
     assert FOTO_KEY in s3.objetos  # la foto quedo, el registro no
     assert REG_KEY not in s3.objetos
@@ -135,27 +135,27 @@ def test_falla_a_la_mitad_se_completa_con_el_reintento(almacen, s3):
 
 def test_error_de_s3_al_guardar_es_no_disponible(almacen, s3):
     s3.fallar["put_object"] = error_s3("InternalError", 500, "PutObject")
-    with pytest.raises(AlmacenNoDisponible, match="InternalError"):
+    with pytest.raises(AlmacenNoDisponibleError, match="InternalError"):
         almacen.guardar(EVENTO, FOTO, RECIBIDO)
     assert s3.objetos == {}
 
 
 def test_sin_red_es_no_disponible(almacen, s3):
     s3.fallar["put_object"] = EndpointConnectionError(endpoint_url="https://s3.amazonaws.com")
-    with pytest.raises(AlmacenNoDisponible, match="EndpointConnectionError"):
+    with pytest.raises(AlmacenNoDisponibleError, match="EndpointConnectionError"):
         almacen.guardar(EVENTO, FOTO, RECIBIDO)
 
 
 def test_permiso_denegado_es_no_disponible_y_no_conflicto(almacen, s3):
     s3.fallar["put_object"] = error_s3("AccessDenied", 403, "PutObject")
-    with pytest.raises(AlmacenNoDisponible, match="AccessDenied"):
+    with pytest.raises(AlmacenNoDisponibleError, match="AccessDenied"):
         almacen.guardar(EVENTO, FOTO, RECIBIDO)
 
 
 def test_obtener_y_foto_inexistentes(almacen):
-    with pytest.raises(CapturaNoEncontrada):
+    with pytest.raises(CapturaNoEncontradaError):
         almacen.obtener("no-existe")
-    with pytest.raises(CapturaNoEncontrada):
+    with pytest.raises(CapturaNoEncontradaError):
         almacen.foto("no-existe")
 
 
@@ -177,5 +177,5 @@ def test_listado_pagina_y_reporta_registros_ilegibles(almacen, s3):
 
 def test_listado_con_s3_caido_es_no_disponible(almacen, s3):
     s3.fallar["list_objects_v2"] = error_s3("ServiceUnavailable", 503, "ListObjectsV2")
-    with pytest.raises(AlmacenNoDisponible):
+    with pytest.raises(AlmacenNoDisponibleError):
         almacen.listar()

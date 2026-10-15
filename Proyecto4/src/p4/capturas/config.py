@@ -45,7 +45,11 @@ class ConfigCapturas(BaseSettings):
     max_evento_bytes: int = Field(default=16 * 1024, alias="P4_MAX_EVENTO_BYTES")
 
     @field_validator(
-        "aws_profile", "s3_endpoint", "s3_access_key", "s3_secret_key", "token_dispositivo",
+        "aws_profile",
+        "s3_endpoint",
+        "s3_access_key",
+        "s3_secret_key",
+        "token_dispositivo",
         mode="before",
     )
     @classmethod

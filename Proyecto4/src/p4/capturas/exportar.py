@@ -32,14 +32,28 @@ COLUMNAS = [
 ]
 
 
-def ordenar(registros: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """De mas reciente a mas antigua por `captured_at` en UTC (desempate: recepcion, ID)."""
+def ordenar(
+    registros: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """De mas reciente a mas antigua por `captured_at` en UTC (desempate: recepcion, ID).
 
-    def llave(registro: dict[str, Any]) -> tuple[datetime, str, str]:
-        capturada = fecha_con_zona(registro["captured_at"]).astimezone(UTC)
-        return capturada, registro.get("received_at", ""), registro["capture_id"]
-
-    return sorted(registros, key=llave, reverse=True)
+    Un registro sin fecha valida con zona no se puede ordenar: va a la segunda lista
+    (los mismos `errores` que reporta el listado) y no tumba a los demas.
+    """
+    validos: list[tuple[tuple[datetime, str, str], dict[str, Any]]] = []
+    errores: list[dict[str, str]] = []
+    for registro in registros:
+        cid = registro.get("capture_id")
+        try:
+            capturada = fecha_con_zona(registro["captured_at"]).astimezone(UTC)
+        except (KeyError, TypeError, ValueError) as error:
+            errores.append(
+                {"llave": str(cid), "problema": f"captured_at no se puede ordenar: {error}"}
+            )
+            continue
+        validos.append(((capturada, str(registro.get("received_at", "")), str(cid)), registro))
+    validos.sort(key=lambda par: par[0], reverse=True)
+    return [registro for _, registro in validos], errores
 
 
 def _fila(registro: dict[str, Any]) -> dict[str, Any]:
@@ -58,9 +72,7 @@ def a_csv(registros: list[dict[str, Any]]) -> str:
     return salida.getvalue()
 
 
-def a_json(
-    registros: list[dict[str, Any]], errores: list[dict[str, str]], ahora: datetime
-) -> str:
+def a_json(registros: list[dict[str, Any]], errores: list[dict[str, str]], ahora: datetime) -> str:
     return json.dumps(
         {
             "exportado_en": ahora.astimezone(UTC).isoformat(timespec="seconds"),

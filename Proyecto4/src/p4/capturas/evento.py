@@ -21,7 +21,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from p4.capturas.config import ConfigCapturas
-from p4.capturas.errores import ErrorCaptura, evento_invalido
+from p4.capturas.errores import CapturaError, evento_invalido
 from p4.capturas.foto import Foto
 
 PATRON_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
@@ -152,11 +152,11 @@ def leer_evento(texto: str) -> EventoCaptura:
     try:
         crudo = json.loads(texto)
     except json.JSONDecodeError as error:
-        raise ErrorCaptura(
+        raise CapturaError(
             400, "solicitud_invalida", f"La parte 'evento' no es JSON valido: {error.msg}"
         ) from error
     if not isinstance(crudo, dict):
-        raise ErrorCaptura(400, "solicitud_invalida", "La parte 'evento' debe ser un objeto JSON")
+        raise CapturaError(400, "solicitud_invalida", "La parte 'evento' debe ser un objeto JSON")
     try:
         return EventoCaptura.model_validate(crudo)
     except ValidationError as error:

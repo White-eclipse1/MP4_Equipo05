@@ -201,3 +201,26 @@ def test_sin_modelos_configurados_lo_dice(almacen):
     respuesta = enviar(app_con(config, almacen), evento_valido(FOTO), FOTO)
     assert respuesta.status_code == 422
     assert "P4_MODELOS_ACEPTADOS" in respuesta.json()["detail"]
+
+
+def jpeg_que_declara(ancho: int, alto: int) -> bytes:
+    """JPEG chiquito cuyo encabezado (SOF0) dice medir `ancho x alto`: una foto "bomba"."""
+    datos = bytearray(FOTO)
+    sof = datos.index(b"\xff\xc0")
+    datos[sof + 5 : sof + 7] = alto.to_bytes(2, "big")
+    datos[sof + 7 : sof + 9] = ancho.to_bytes(2, "big")
+    return bytes(datos)
+
+
+@pytest.mark.parametrize(
+    ("ancho", "alto"),
+    [(65000, 65000), (8000, 8000)],
+    ids=["bomba que Pillow rechaza", "sobre el tope del receptor"],
+)
+def test_foto_bomba_es_415_y_no_500(cliente, almacen, ancho, alto):
+    bomba = jpeg_que_declara(ancho, alto)
+    assert len(bomba) < 2000
+    respuesta = enviar(cliente, evento_valido(bomba), bomba)
+    assert respuesta.status_code == 415, respuesta.text
+    assert respuesta.json()["error"] == "foto_no_soportada"
+    assert almacen.listar()[0] == []

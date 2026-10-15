@@ -12,7 +12,7 @@ from typing import Any
 from fastapi.responses import JSONResponse
 
 
-class ErrorCaptura(Exception):
+class CapturaError(Exception):
     def __init__(
         self,
         status: int,
@@ -33,8 +33,8 @@ class ErrorCaptura(Exception):
         )
 
 
-def evento_invalido(problemas: list[dict[str, Any]]) -> ErrorCaptura:
+def evento_invalido(problemas: list[dict[str, Any]]) -> CapturaError:
     primero = problemas[0]
-    return ErrorCaptura(
+    return CapturaError(
         422, "evento_invalido", f"{primero['campo']}: {primero['problema']}", problemas
     )

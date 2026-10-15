@@ -164,6 +164,35 @@ describe('Capturas Edge', () => {
     expect(screen.getByLabelText('Captura edge01-a')).toBeInTheDocument();
   });
 
+  it('un 503 al actualizar también conserva la última lista y avisa', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(respuesta([captura({ capture_id: 'edge01-a' })]))
+      .mockResolvedValueOnce(
+        jsonResponse({ error: 'almacen_no_disponible', detail: 'S3 no respondio' }, 503),
+      );
+    vi.stubGlobal('fetch', fetch);
+    const user = userEvent.setup();
+    render(<CapturasEdge />);
+    await screen.findByLabelText('Captura edge01-a');
+
+    await user.click(screen.getByRole('button', { name: 'Actualizar' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No se pudo actualizar: S3 no respondio. Se muestra la última lista cargada.',
+    );
+    expect(screen.getByLabelText('Captura edge01-a')).toBeInTheDocument();
+    expect(screen.queryByText(/Capturas no disponibles/)).not.toBeInTheDocument();
+  });
+
+  it('si la primera carga falla, muestra el error en lugar de la lista', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ detail: 'Error interno' }, 500)));
+    render(<CapturasEdge />);
+    const alerta = await screen.findByRole('alert');
+    expect(alerta).toHaveTextContent('No se pudieron cargar las capturas.');
+    expect(alerta).toHaveTextContent('Error interno');
+  });
+
   it('enlaces de exportación CSV y JSON', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respuesta([])));
     render(<CapturasEdge />);

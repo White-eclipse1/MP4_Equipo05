@@ -118,8 +118,10 @@ export default function CapturasEdge() {
     } catch (e: unknown) {
       if (e instanceof ApiError && e.status === 503) {
         setNoDisponible(e.message);
+        setError(null);
       } else {
         setError(e instanceof Error ? e.message : 'Error desconocido');
+        setNoDisponible(null);
       }
     } finally {
       setCargando(false);
@@ -163,10 +165,10 @@ export default function CapturasEdge() {
         </div>
       </div>
 
-      {error && (
+      {/* Una falla al actualizar (incluido un 503) avisa y conserva la última lista. */}
+      {datos !== null && (error || noDisponible) && (
         <div className="banner warn" role="alert">
-          No se pudo actualizar: {error}
-          {datos && ' Se muestra la última lista cargada.'}
+          No se pudo actualizar: {error ?? noDisponible}. Se muestra la última lista cargada.
         </div>
       )}
       {datos && datos.errores.length > 0 && (
@@ -184,14 +186,17 @@ export default function CapturasEdge() {
           )
         }
       >
-        {noDisponible ? (
+        {primeraCarga ? (
+          <p className="state">Cargando capturas…</p>
+        ) : datos === null && noDisponible ? (
           <p className="state">
             Capturas no disponibles: {noDisponible}. Revisa la configuración del receptor (P4_*).
           </p>
-        ) : primeraCarga ? (
-          <p className="state">Cargando capturas…</p>
         ) : datos === null ? (
-          <p className="state">No se pudieron cargar las capturas.</p>
+          <div className="state" role="alert">
+            <p>No se pudieron cargar las capturas.</p>
+            {error && <p className="mono">{error}</p>}
+          </div>
         ) : datos.items.length === 0 ? (
           <p className="state">
             Todavía no hay capturas. Aparecerán aquí en cuanto el dispositivo envíe la primera.

@@ -2,7 +2,7 @@
 
 El `capture_id` es la clave de idempotencia:
 - mismo ID, mismos campos y misma foto -> `duplicado`, sin escribir nada;
-- mismo ID con otros datos -> `ConflictoCaptura`, nunca se sobrescribe.
+- mismo ID con otros datos -> `ConflictoCapturaError`, nunca se sobrescribe.
 
 `AlmacenS3` lo garantiza con escrituras condicionales (`If-None-Match: *`): la
 foto primero y despues el registro, asi un registro nunca apunta a una foto que
@@ -33,7 +33,7 @@ class Guardado:
     registro: Registro
 
 
-class ConflictoCaptura(Exception):
+class ConflictoCapturaError(Exception):
     """El `capture_id` ya existe con otros datos u otra foto."""
 
     def __init__(self, diferencias: list[dict[str, Any]]) -> None:
@@ -41,11 +41,11 @@ class ConflictoCaptura(Exception):
         self.diferencias = diferencias
 
 
-class CapturaNoEncontrada(Exception):
+class CapturaNoEncontradaError(Exception):
     pass
 
 
-class AlmacenNoDisponible(Exception):
+class AlmacenNoDisponibleError(Exception):
     """El almacen no respondio o no esta configurado: el envio se puede reintentar."""
 
 
@@ -63,16 +63,16 @@ class AlmacenAusente:
         self.motivo = motivo
 
     def guardar(self, evento: EventoCaptura, foto: Foto, recibido: datetime) -> Guardado:
-        raise AlmacenNoDisponible(self.motivo)
+        raise AlmacenNoDisponibleError(self.motivo)
 
     def listar(self) -> tuple[list[Registro], list[dict[str, str]]]:
-        raise AlmacenNoDisponible(self.motivo)
+        raise AlmacenNoDisponibleError(self.motivo)
 
     def obtener(self, capture_id: str) -> Registro:
-        raise AlmacenNoDisponible(self.motivo)
+        raise AlmacenNoDisponibleError(self.motivo)
 
     def foto(self, capture_id: str) -> bytes:
-        raise AlmacenNoDisponible(self.motivo)
+        raise AlmacenNoDisponibleError(self.motivo)
 
 
 def llave_foto(prefijo: str, capture_id: str) -> str:
@@ -120,7 +120,7 @@ class AlmacenMemoria:
             if existente is not None:
                 distintos = diferencias(existente, evento)
                 if distintos:
-                    raise ConflictoCaptura(distintos)
+                    raise ConflictoCapturaError(distintos)
                 return Guardado("duplicado", existente)
             registro = armar_registro(evento, foto, recibido, self.prefijo)
             self._fotos[evento.capture_id] = foto.datos
@@ -135,13 +135,13 @@ class AlmacenMemoria:
         try:
             return self._registros[capture_id]
         except KeyError as error:
-            raise CapturaNoEncontrada(capture_id) from error
+            raise CapturaNoEncontradaError(capture_id) from error
 
     def foto(self, capture_id: str) -> bytes:
         try:
             return self._fotos[capture_id]
         except KeyError as error:
-            raise CapturaNoEncontrada(capture_id) from error
+            raise CapturaNoEncontradaError(capture_id) from error
 
 
 def _codigo(error: ClientError) -> str:
@@ -172,9 +172,11 @@ class AlmacenS3:
         self.bucket = bucket
         self.prefijo = prefijo
 
-    def _falla(self, accion: str, error: Exception) -> AlmacenNoDisponible:
+    def _falla(self, accion: str, error: Exception) -> AlmacenNoDisponibleError:
         detalle = _codigo(error) if isinstance(error, ClientError) else type(error).__name__
-        return AlmacenNoDisponible(f"S3 fallo al {accion} ({detalle}); reintenta con el mismo ID")
+        return AlmacenNoDisponibleError(
+            f"S3 fallo al {accion} ({detalle}); reintenta con el mismo ID"
+        )
 
     def guardar(self, evento: EventoCaptura, foto: Foto, recibido: datetime) -> Guardado:
         cid = evento.capture_id
@@ -209,7 +211,7 @@ class AlmacenS3:
             existente = self.obtener(cid)
             distintos = diferencias(existente, evento)
             if distintos:
-                raise ConflictoCaptura(distintos) from error
+                raise ConflictoCapturaError(distintos) from error
             return Guardado("duplicado", existente)
         except BotoCoreError as error:
             raise self._falla("guardar el registro", error) from error
@@ -225,7 +227,7 @@ class AlmacenS3:
             raise self._falla("leer la foto existente", error) from error
         guardado = cabecera.get("Metadata", {}).get("sha256")
         if guardado != foto.sha256:
-            raise ConflictoCaptura(
+            raise ConflictoCapturaError(
                 [{"campo": "image_sha256", "guardado": guardado, "recibido": foto.sha256}]
             )
 
@@ -234,7 +236,7 @@ class AlmacenS3:
             return self.cliente.get_object(Bucket=self.bucket, Key=llave)["Body"].read()
         except ClientError as error:
             if _no_existe(error):
-                raise CapturaNoEncontrada(capture_id) from error
+                raise CapturaNoEncontradaError(capture_id) from error
             raise self._falla("leer", error) from error
         except BotoCoreError as error:
             raise self._falla("leer", error) from error
