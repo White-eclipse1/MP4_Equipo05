@@ -1,10 +1,9 @@
-"""Verificacion del linaje del modelo (VAL-01, M1): `modelo/verificar_linaje.py`."""
+"""Verificacion del linaje del modelo (VAL-01, #1; M1): `modelo/verificar_linaje.py`."""
 
 from __future__ import annotations
 
 import copy
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
@@ -16,7 +15,7 @@ linaje = importlib.util.module_from_spec(_spec)
 sys.modules[_spec.name] = linaje  # dataclasses busca el modulo ahi
 _spec.loader.exec_module(linaje)
 
-RECORD_CHECKS = {
+COMPROBACIONES_REGISTROS = {
     "origen.version",
     "origen.run_id",
     "origen.checkpoint",
@@ -27,181 +26,143 @@ RECORD_CHECKS = {
     "preprocesamiento",
     "conversion.referencia",
     "conversion.entrada_salida",
-    "registros.publicados",
     "paquete.reconstruido",
     "calibracion.train",
     "origen.no_externo",
 }
 
 
-def run_records() -> tuple[dict[str, str], dict]:
-    checks = linaje.Checks()
-    ctx = linaje.check_records(checks)
-    return {c.id: c.estado for c in checks}, ctx
+def correr() -> tuple[dict[str, str], dict]:
+    c = linaje.Comprobaciones()
+    ctx = linaje.comprobar_registros(c)
+    return {x.id: x.estado for x in c}, ctx
 
 
-def failed(states: dict[str, str]) -> set[str]:
-    return {check_id for check_id, state in states.items() if state == linaje.FAIL}
+def fallidas(estados: dict[str, str]) -> set[str]:
+    return {id_ for id_, estado in estados.items() if estado == linaje.FALLA}
+
+
+def alterar(monkeypatch: pytest.MonkeyPatch, lector: str, nombre: str, cambio) -> None:
+    """Aplica `cambio` a lo que devuelve `linaje.<lector>` para el archivo `nombre`."""
+    original = getattr(linaje, lector)
+
+    def leer(ruta: Path):
+        datos = original(ruta)
+        if ruta.name == nombre:
+            datos = copy.deepcopy(datos)
+            datos = cambio(datos) or datos
+        return datos
+
+    monkeypatch.setattr(linaje, lector, leer)
 
 
 def test_linaje_en_registros_completo_y_sin_fallas():
-    states, ctx = run_records()
-    assert set(states) == RECORD_CHECKS
-    assert failed(states) == set()
+    estados, ctx = correr()
+    assert set(estados) == COMPROBACIONES_REGISTROS
+    assert fallidas(estados) == set()
     ficha = ctx["ficha"]
     assert ficha["original"]["version"] == "1.0.0"
     assert ficha["original"]["run_id"] == "9f9b62c202f0446a8a4b411a10321eff"
-    assert ficha["variante"]["version"] == "1.0.0-int8.1"
+    assert ficha["variante"]["version"] == "1.0.0-int8-e05.1"
     assert ficha["class_map"] == {"0": "cat", "1": "dog", "2": "person"}
-
-
-def test_model_package_se_reconstruye_byte_a_byte():
-    _, ctx = run_records()
-    expected = ctx["log"]["package"]["sha256"]
-    rebuilt = {
-        nl: linaje.sha256_bytes(linaje.rebuild_model_package(ctx["cfg"], ctx["log"], nl))
-        for nl in ("\n", "\r\n")
-    }
-    assert expected in rebuilt.values()
-
-
-def tamper(monkeypatch: pytest.MonkeyPatch, name: str, change) -> None:
-    original = linaje.read_json
-
-    def read_json(path: Path):
-        data = original(path)
-        if path.name == name:
-            data = copy.deepcopy(data)
-            change(data)
-        return data
-
-    monkeypatch.setattr(linaje, "read_json", read_json)
+    assert ficha["preprocesamiento"]["image_size"] == 224
 
 
 def test_detecta_variante_con_otro_hash(monkeypatch):
-    def change(log):
-        log["outputs"]["int8"]["sha256"] = "0" * 64
+    def cambio(registro):
+        registro["salidas"]["int8"]["sha256"] = "0" * 64
 
-    tamper(monkeypatch, "conversion_log.json", change)
-    states, _ = run_records()
-    assert "variante.sha256_registros" in failed(states)
+    alterar(monkeypatch, "leer_json", "registro_conversion.json", cambio)
+    estados, _ = correr()
+    # El paquete declara el SHA-256 de la variante: tampoco se reconstruye.
+    assert {"variante.sha256_registros", "paquete.reconstruido"} <= fallidas(estados)
 
 
 def test_detecta_orden_de_clases_distinto(monkeypatch):
-    def change(log):
-        log["input"]["class_names"] = ["dog", "cat", "person"]
+    def cambio(clases):
+        clases["classes"][0]["class_index"], clases["classes"][1]["class_index"] = 1, 0
 
-    tamper(monkeypatch, "conversion_log.json", change)
-    states, _ = run_records()
-    # Cambia el orden declarado y el paquete reconstruido deja de ser el publicado.
-    assert {"clases.orden", "paquete.reconstruido"} <= failed(states)
+    alterar(monkeypatch, "leer_yaml", "classes.yaml", cambio)
+    estados, _ = correr()
+    assert {"clases.orden", "paquete.reconstruido"} <= fallidas(estados)
 
 
 def test_detecta_origen_distinto_al_seleccionado_en_p3(monkeypatch):
-    def change(selection):
-        selection["run_id"] = "otro-run"
-        selection["checkpoint_sha256"] = "f" * 64
+    def cambio(seleccion):
+        seleccion["run_id"] = "otro-run"
+        seleccion["checkpoint_sha256"] = "f" * 64
 
-    tamper(monkeypatch, "selection.json", change)
-    states, _ = run_records()
-    assert {"origen.run_id", "origen.sha256_registros"} <= failed(states)
-
-
-def test_detecta_preprocesamiento_distinto(monkeypatch):
-    def change(log):
-        log["input"]["preprocessing"]["mean"] = [0.5, 0.5, 0.5]
-
-    tamper(monkeypatch, "conversion_log.json", change)
-    states, _ = run_records()
-    assert "preprocesamiento" in failed(states)
+    alterar(monkeypatch, "leer_json", "selection.json", cambio)
+    estados, _ = correr()
+    assert {"origen.run_id", "origen.sha256_registros"} <= fallidas(estados)
 
 
-class FakeBody:
-    def __init__(self, data: bytes):
-        self.data = data
+def test_detecta_preprocesamiento_distinto_en_el_edge(monkeypatch):
+    def cambio(valores):
+        valores["TAMANO"] = 160
 
-    def read(self) -> bytes:
-        return self.data
-
-    def iter_chunks(self, size: int):
-        for start in range(0, len(self.data), size):
-            yield self.data[start : start + size]
+    alterar(monkeypatch, "constantes", "preprocesar.py", cambio)
+    estados, _ = correr()
+    assert "preprocesamiento" in fallidas(estados)
 
 
-class FakeS3:
-    def __init__(self, objects: dict[str, tuple[bytes, str]]):
-        self.objects = objects
+def test_detecta_calibracion_con_muestra_de_test(monkeypatch):
+    test_csv = linaje.P3 / "reports" / "evaluation"
+    test_csv = next(test_csv.glob("*/predictions_test.csv"))
+    id_test = linaje.leer_texto(test_csv).splitlines()[1].split(",", 1)[0]
+
+    def cambio(texto):
+        lineas = texto.splitlines()
+        lineas[0] = lineas[0].replace(lineas[0].split('"')[3], id_test)
+        return "\n".join(lineas) + "\n"
+
+    alterar(monkeypatch, "leer_texto", "calibracion_ids.jsonl", cambio)
+    estados, _ = correr()
+    assert "calibracion.train" in fallidas(estados)
+
+
+class CuerpoFalso:
+    def __init__(self, datos: bytes):
+        self.datos = datos
+
+    def iter_chunks(self, tamano: int):
+        for inicio in range(0, len(self.datos), tamano):
+            yield self.datos[inicio : inicio + tamano]
+
+
+class S3Falso:
+    def __init__(self, objetos: dict[str, bytes]):
+        self.objetos = objetos
 
     def get_object(self, Bucket: str, Key: str):  # noqa: N803 (firma de boto3)
-        data, version_id = self.objects[Key]
-        return {"Body": FakeBody(data), "VersionId": version_id}
+        return {"Body": CuerpoFalso(self.objetos[Key]), "VersionId": f"v-{Key}", "Metadata": {}}
 
 
-def test_s3_detecta_modelo_sustituido():
-    """Paquete del P3 correcto pero binarios ajenos: fallan los SHA-256 de los binarios."""
-    checks = linaje.Checks()
-    ctx = linaje.check_records(checks)
-    cfg, log, publication = ctx["cfg"], ctx["log"], ctx["publication"]
-    src = cfg["source"]
-    prefix = f"{linaje.P3_MODELS_PREFIX}/{src['p3_version']}"
-    as_json = lambda data: json.dumps(data).encode()  # noqa: E731
-    objects = {
-        src["s3_key"]: (b"pesos de otro modelo", src["s3_version_id"]),
-        f"{linaje.P3_MODELS_PREFIX}/registry.json": (
-            as_json(
-                {
-                    "schema_version": 1,
-                    "active_version": src["p3_version"],
-                    "versions": [
-                        {
-                            "version": src["p3_version"],
-                            "run_id": src["run_id"],
-                            "manifest_id": "m-0.1.3-s42-1",
-                            "key": src["s3_key"],
-                            "sha256": src["sha256"],
-                            "s3_version_id": src["s3_version_id"],
-                        }
-                    ],
-                }
-            ),
-            "v",
-        ),
-        f"{prefix}/class_map.json": (
-            as_json(
-                {
-                    "classes": [
-                        {"class_index": i, "category_name": name}
-                        for i, name in enumerate(linaje.EXPECTED_CLASSES)
-                    ]
-                }
-            ),
-            "v",
-        ),
-        f"{prefix}/preprocessing.json": (as_json(log["input"]["preprocessing"]), "v"),
-        f"{prefix}/model_version.json": (
-            as_json({"run_id": src["run_id"], "files": {"model.pt": {"sha256": src["sha256"]}}}),
-            "v",
-        ),
+def test_s3_detecta_binarios_sustituidos():
+    """Registros y paquete correctos pero pesos ajenos: fallan solo los binarios."""
+    c = linaje.Comprobaciones()
+    ctx = linaje.comprobar_registros(c)
+    salidas = ctx["registro"]["salidas"]
+    edge = f"{linaje.PREFIJO_EDGE}/{linaje.VARIANTE}"
+    objetos = {
+        f"{linaje.PREFIJO_P3}/{linaje.VERSION_P3}/model.pt": b"pesos de otro modelo",
+        f"{edge}/{salidas['int8']['archivo']}": b"onnx ajeno",
+        f"{edge}/{salidas['fp32']['archivo']}": b"onnx ajeno",
+        f"{edge}/model_package.json": ctx["paquete"],
+        f"{edge}/registro_conversion.json": (
+            linaje.REGISTROS / "registro_conversion.json"
+        ).read_bytes(),
+        f"{edge}/calibracion_ids.jsonl": (linaje.REGISTROS / "calibracion_ids.jsonl").read_bytes(),
     }
-    package = linaje.rebuild_model_package(cfg, log, "\r\n")
-    for obj in publication["objects"]:
-        name = obj["key"].rsplit("/", 1)[-1]
-        if name == "model_package.json":
-            data = package
-        elif name.endswith(".onnx"):
-            data = b"onnx de otro modelo"
-        else:
-            data = (linaje.RECORDS / name).read_bytes()
-        objects[obj["key"]] = (data, obj["version_id"])
 
-    linaje.check_s3(checks, ctx, FakeS3(objects))
-    states = {c.id: c.estado for c in checks}
-    assert failed(states) == {
-        "s3.original",
-        "s3.variante.model_int8.onnx",
-        "s3.variante.model_fp32.onnx",
-    }
-    assert states["s3.registry_p3"] == linaje.OK
-    assert states["s3.paquete_p3"] == linaje.OK
-    assert states["s3.variante.model_package.json"] == linaje.OK
-    assert states["s3.model_package"] == linaje.OK
+    linaje.comprobar_s3(c, ctx, S3Falso(objetos), "bucket-de-prueba")
+    estados = {x.id: x.estado for x in c}
+    assert fallidas(estados) == {"s3.model.pt", "s3.model_int8.onnx", "s3.model_fp32.onnx"}
+    for id_ in (
+        "s3.model_package.json",
+        "s3.registro_conversion.json",
+        "s3.calibracion_ids.jsonl",
+        "s3.paquete_contenido",
+    ):
+        assert estados[id_] == linaje.OK
+    assert ctx["ficha"]["publicacion"]["bucket"] == "bucket-de-prueba"
