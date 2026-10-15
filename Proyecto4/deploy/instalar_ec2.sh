@@ -54,6 +54,9 @@ if [ ! -d "$REPO/.git" ]; then
   git clone --branch "$P4_RAMA" "$REPO_URL" "$REPO"
 fi
 chown -R ec2-user:ec2-user "$REPO"
+# El clon es de ec2-user y los comandos de este script corren como root: sin esto git
+# se niega a leerlo ("dubious ownership").
+git config --system --add safe.directory "$REPO"
 git -C "$REPO" log -1 --format="commit %H %s"
 
 echo "== secretos (generados aqui; no se imprimen)"
