@@ -14,7 +14,8 @@ credentials
 *.tflite
 
 # Capturas locales del dispositivo
-capturas/
+# Solo la carpeta de fotos en la raiz; `src/p4/capturas/` es codigo y si se versiona.
+/capturas/
 
 # Python
 __pycache__/

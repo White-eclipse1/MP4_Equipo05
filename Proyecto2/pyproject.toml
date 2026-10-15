@@ -61,6 +61,6 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# `../Proyecto3/src`: la app monta los routers de P3.
-pythonpath = ["src", "../Proyecto3/src"]
+# `../Proyecto3/src` y `../Proyecto4/src`: la app monta los routers de P3 y P4.
+pythonpath = ["src", "../Proyecto3/src", "../Proyecto4/src"]
 addopts = "-q"

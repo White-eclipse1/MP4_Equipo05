@@ -708,3 +708,95 @@ details summary::-webkit-details-marker {
   text-align: center;
   line-height: 1.1;
 }
+
+/* --------------------------- Capturas Edge (P4) --------------------------- */
+.cap-acciones {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+
+.cap-auto {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-2);
+}
+
+.cap-tenue {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cap-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.cap-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* La caja toma la proporción de la foto: el recorte se dibuja en % exactos. */
+.cap-foto {
+  position: relative;
+  overflow: hidden; /* el sombreado del recorte no sale de la foto */
+  background: var(--surface-2);
+}
+
+.cap-foto img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cap-sin-foto {
+  margin: 0;
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.cap-region {
+  position: absolute;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.25);
+  pointer-events: none;
+}
+
+.cap-datos {
+  padding: 10px 12px 12px;
+}
+
+.cap-clase {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.cap-datos dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.cap-datos dt {
+  color: var(--muted);
+}
+
+.cap-datos dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
