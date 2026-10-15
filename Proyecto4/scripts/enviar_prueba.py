@@ -10,9 +10,13 @@ Hace lo mismo que hara el dispositivo y comprueba cada respuesta del contrato
 3. mismo capture_id con otra clase                -> 409 conflicto_capture_id
 4. evento sin zona horaria en captured_at         -> 422 evento_invalido
 5. evento valido sin token                        -> 401 no_autorizado
+6. el reintento devuelve el received_at del primer envio
 
-El token se lee de Parameter Store (`/p4/token-dispositivo`) con la CLI de AWS y
-nunca se imprime ni se guarda. La captura del paso 1 queda guardada en S3 y aparece
+El token se lee de Parameter Store (`/p4/token-dispositivo`) con la CLI de AWS, nunca se
+imprime ni se guarda y SOLO se envia al receptor desplegado (`URL`): con otra `--url` el
+script se detiene, salvo con `--token-de-entorno` y un token de prueba.
+
+La captura del paso 1 queda guardada en S3 y aparece
 en Capturas Edge con `device_id=prueba-int`, para distinguirla de las del dispositivo.
 
 Deja en `Proyecto4/capturas/pruebas/<capture_id>/` (ignorado por Git) la foto, el
@@ -78,7 +82,7 @@ def foto_de_prueba(capture_id: str) -> bytes:
     return salida.getvalue()
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--url", default=URL)
     parser.add_argument("--profile", help="perfil de ~/.aws con acceso a Parameter Store")
@@ -88,7 +92,15 @@ def main() -> int:
         action="store_true",
         help="leer el token de P4_TOKEN_DISPOSITIVO (pruebas locales) en vez de Parameter Store",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    # El token REAL (Parameter Store) solo viaja al receptor desplegado: otra URL podria
+    # entregarlo a un servidor ajeno. Para otro receptor (local, CI), un token de prueba
+    # en P4_TOKEN_DISPOSITIVO con --token-de-entorno.
+    if not args.token_de_entorno and args.url != URL:
+        sys.exit(
+            f"El token real solo se envia a {URL}. Para probar contra {args.url} usa "
+            "--token-de-entorno con un token de prueba en P4_TOKEN_DISPOSITIVO."
+        )
 
     ahora = datetime.now().astimezone()
     capture_id = f"{DISPOSITIVO}-{ahora:%Y%m%dT%H%M%S}-0001"
@@ -174,6 +186,20 @@ def main() -> int:
             + ("" if ok else f"  (esperado {status_esperado} {codigo_esperado})")
         )
     del token
+
+    # El reintento no escribe: debe devolver el received_at del primer envio.
+    primero = resultados[0]["respuesta"].get("received_at")
+    reintento = resultados[1]["respuesta"].get("received_at")
+    conserva = primero is not None and primero == reintento
+    resultados.append(
+        {
+            "caso": "6. el reintento conserva received_at",
+            "esperado": ["received_at del caso 1", primero],
+            "obtenido": ["received_at del caso 2", reintento],
+            "ok": conserva,
+        }
+    )
+    print(f"[{'OK' if conserva else 'FALLA':5}] {'6. reintento, received_at':30} -> {reintento}")
 
     todo_ok = all(r["ok"] for r in resultados)
     (carpeta / "resultado.json").write_text(

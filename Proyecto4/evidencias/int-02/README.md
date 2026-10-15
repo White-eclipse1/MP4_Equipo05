@@ -28,6 +28,10 @@ La foto es una imagen sintética que dice "PRUEBA DEL CONTRATO", no una captura 
 | 4. `captured_at` sin zona horaria | 422 `evento_invalido` | ✅ 422 |
 | 5. Sin token | 401 `no_autorizado` | ✅ 401 |
 
+Después de la revisión del PM, el script comprueba también, como caso 6, que el reintento devuelva el `received_at` del primer envío. En esta corrida ya coincidían: `2026-10-15T22:40:25.035+00:00` en los casos 1 y 2 de `resultado.json`.
+
+El token real ahora solo se envía a la URL del receptor desplegado: con otra `--url` el script se detiene, salvo con `--token-de-entorno` y un token de prueba. `tests/test_enviar_prueba.py` lo prueba en CI, junto con los 6 casos, contra el receptor en memoria.
+
 ## Persistencia en AWS ([`consulta-s3.txt`](consulta-s3.txt))
 
 Consulta de solo lectura con [`scripts/consultar_captura.py`](../../scripts/consultar_captura.py) sobre `prueba-int-20261015T164022-0001`:
