@@ -17,6 +17,7 @@ from p3.registry.proxy import router as p3_models_router
 from p3.train.runs_api import router as p3_runs_router
 from p3.train.selection import router as p3_selection_router
 from p3.worker.api import router as p3_training_router
+from p4.capturas.api import router as p4_capturas_router
 
 from dataset_quality import __version__
 from dataset_quality.api.artifacts import router as artifacts_router
@@ -95,6 +96,8 @@ def create_app() -> FastAPI:
     app.include_router(p3_runs_router)
     app.include_router(p3_evaluation_router)
     app.include_router(p3_models_router)
+    # Proyecto 4 (`Proyecto4/src/p4`): capturas del dispositivo edge bajo `/api/p4/capturas`.
+    app.include_router(p4_capturas_router)
 
     # El build de Vite (si existe). En desarrollo puede no estar compilado
     # todavia: la API sigue respondiendo y /docs tambien.

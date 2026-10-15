@@ -131,7 +131,8 @@ services:
       MLFLOW_UI_URL: ${MLFLOW_UI_URL:-http://localhost:${MLFLOW_PORT:-5000}}
       # Proyecto 3 vive en el mismo portal: su paquete `p3` se monta en
       # `/opt/p3/src` (ver `volumes`) y la app monta su router `/api/p3/...`.
-      PYTHONPATH: /app/src:/opt/p3/src
+      # Proyecto 4 igual: `p4` en `/opt/p4/src` y su router `/api/p4/capturas`.
+      PYTHONPATH: /app/src:/opt/p3/src:/opt/p4/src
       P3_MANIFESTS_DIR: /opt/p3/data/manifests
       P3_CROPS_DIR: /opt/p3/data/crops
     ports:
@@ -156,6 +157,8 @@ services:
       # El codigo de Proyecto 3, en solo lectura y fuera de `/app/src` para no
       # crear un punto de montaje dentro del arbol de Proyecto2.
       - ../Proyecto3/src:/opt/p3/src:ro
+      # El codigo de Proyecto 4 (receptor de Capturas Edge), igual que el de P3.
+      - ../Proyecto4/src:/opt/p4/src:ro
       # Los datos de P3, en solo lectura, como el worker: manifiestos de F3
       # (`/api/p3/manifests`) y recortes de F2 (miniaturas de Evaluation). Se
       # monta `data/` entera porque existe en Git: montar `data/crops`, que no
@@ -178,6 +181,8 @@ services:
       - /app/src
       - --reload-dir
       - /opt/p3/src
+      - --reload-dir
+      - /opt/p4/src
     healthcheck:
       test:
         - CMD

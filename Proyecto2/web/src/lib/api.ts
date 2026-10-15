@@ -627,6 +627,47 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+// ---------------------------------------------------------------------------
+// Proyecto 4: capturas del dispositivo edge (`Proyecto4/src/p4/capturas`).
+// ---------------------------------------------------------------------------
+
+/** Recorte clasificado, en píxeles de la foto. */
+export interface RegionCaptura {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Registro guardado: lo que mandó el dispositivo más lo que agrega el receptor. */
+export interface CapturaEdge {
+  schema_version: number;
+  capture_id: string;
+  /** ISO 8601 con el offset del dispositivo. */
+  captured_at: string;
+  predicted_class: string;
+  confidence: number;
+  device_id: string;
+  model_version: string;
+  model_sha256: string;
+  image_sha256: string;
+  image_ref: string;
+  region: RegionCaptura | null;
+  /** ISO 8601 en UTC, puesto por el receptor. */
+  received_at: string;
+  image_key: string;
+  image_bytes: number;
+  image_width: number;
+  image_height: number;
+}
+
+/** `GET /api/p4/capturas`: de más reciente a más antigua; `errores` = registros ilegibles. */
+export interface CapturasRespuesta {
+  items: CapturaEdge[];
+  total: number;
+  errores: { llave: string; problema: string }[];
+}
+
 export const api = {
   status: () =>
     request<Record<string, { available: boolean; produced_by: string }>>('/api/status'),
@@ -730,6 +771,15 @@ export const api = {
         `/api/p3/inference/${encodeURIComponent(inferenceId)}/send-to-annotation`,
         { method: 'POST' },
       ),
+  },
+
+  /** Capturas Edge (Proyecto 4), bajo `/api/p4/capturas`. Solo lectura desde el portal. */
+  p4: {
+    capturas: (limite = 200) =>
+      request<CapturasRespuesta>(`/api/p4/capturas?limite=${limite}`),
+    /** La foto la lee el servidor del almacén: el navegador nunca recibe URLs de S3. */
+    fotoUrl: (captureId: string) => `/api/p4/capturas/${encodeURIComponent(captureId)}/foto`,
+    exportarUrl: (formato: 'csv' | 'json') => `/api/p4/capturas/exportar?formato=${formato}`,
   },
 };
 

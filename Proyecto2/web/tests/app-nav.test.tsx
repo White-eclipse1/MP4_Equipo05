@@ -27,3 +27,20 @@ describe('navegación del portal con las páginas de P3', () => {
     }
   });
 });
+
+describe('navegación del portal con Capturas Edge (P4)', () => {
+  it('aparece en el menú después de Inference y abre su página', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    const etiquetas = Array.from(container.querySelectorAll('.nav .label')).map(
+      (etiqueta) => etiqueta.textContent,
+    );
+    expect(etiquetas[etiquetas.indexOf('Inference') + 1]).toBe('Capturas Edge');
+
+    await user.click(screen.getByRole('button', { name: /Capturas Edge/ }));
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Capturas Edge' }),
+    ).toBeInTheDocument();
+    expect(window.location.hash).toBe('#/capturas-edge');
+  });
+});
