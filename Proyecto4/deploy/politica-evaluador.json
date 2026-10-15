@@ -4,17 +4,32 @@
     {
       "Sid": "ListarCapturasYModelos",
       "Effect": "Allow",
-      "Action": ["s3:ListBucket", "s3:ListBucketVersions"],
+      "Action": [
+        "s3:ListBucket",
+        "s3:ListBucketVersions"
+      ],
       "Resource": "arn:aws:s3:::p4-capturas-474665692638",
-      "Condition": {"StringLike": {"s3:prefix": ["edge-capturas/*", "modelos/*"]}}
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "edge-capturas/*",
+            "modelos/*",
+            "models/*"
+          ]
+        }
+      }
     },
     {
       "Sid": "LeerCapturasYModelos",
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:GetObjectVersion"],
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion"
+      ],
       "Resource": [
         "arn:aws:s3:::p4-capturas-474665692638/edge-capturas/*",
-        "arn:aws:s3:::p4-capturas-474665692638/modelos/*"
+        "arn:aws:s3:::p4-capturas-474665692638/modelos/*",
+        "arn:aws:s3:::p4-capturas-474665692638/models/*"
       ]
     }
   ]

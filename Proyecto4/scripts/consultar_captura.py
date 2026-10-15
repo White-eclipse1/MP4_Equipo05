@@ -9,9 +9,9 @@ Muestra, con las mismas llamadas que podria hacer el evaluador:
 4. el SHA-256 recalculado de la foto descargada, contra el del registro y el de S3;
 5. cuantas versiones tiene cada objeto (1 = nunca se sobrescribio: sin duplicados).
 
-Solo usa `head-object`, `get-object` y `list-object-versions` por la CLI de AWS (asi
-funciona con `aws login`). No escribe ni borra nada; la foto se descarga a una
-carpeta temporal que se borra al terminar.
+Solo usa `sts get-caller-identity`, `s3api get-object` y `s3api list-object-versions`
+por la CLI de AWS (asi funciona con `aws login`). No escribe ni borra nada; la foto se
+descarga a una carpeta temporal que se borra al terminar.
 """
 
 from __future__ import annotations
@@ -106,9 +106,11 @@ def main() -> int:
         print(f"   igual al de S3:      {sha_calc == sha_s3}")
         print(f"   igual al del evento: {sha_calc == registro.get('image_sha256')}")
 
+    # `--prefix` tambien traeria llaves que EMPIEZAN igual: se cuentan solo las exactas.
     versiones = {
-        llave: len(
-            aws(
+        llave: sum(
+            v["Key"] == llave
+            for v in aws(
                 "s3api",
                 "list-object-versions",
                 "--bucket",

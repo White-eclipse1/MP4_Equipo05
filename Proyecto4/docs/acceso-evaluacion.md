@@ -18,7 +18,7 @@ aws ssm get-parameter --name /p4/portal-evaluador --with-decryption --query Para
 
 ## Consulta de solo lectura en AWS (demostración)
 
-[`scripts/consultar_captura.py`](../scripts/consultar_captura.py) sigue una captura elegida por el evaluador. Solo usa `get-object`, `head-object` y `list-object-versions`; no escribe ni borra.
+[`scripts/consultar_captura.py`](../scripts/consultar_captura.py) sigue una captura elegida por el evaluador. Solo usa `sts get-caller-identity`, `get-object` y `list-object-versions`; no escribe ni borra.
 
 ```bash
 python Proyecto4/scripts/consultar_captura.py <capture_id> --profile p4-equipo
@@ -49,7 +49,7 @@ aws s3api list-object-versions --bucket p4-capturas-474665692638 --prefix edge-c
 La rúbrica no lo exige: basta la consulta en vivo. Si se pide:
 
 1. **Crear el usuario:** el dueño de la cuenta crea un usuario IAM `p4-evaluador`, **sin acceso a la consola**.
-2. **Darle solo lectura:** se le asigna únicamente [`deploy/politica-evaluador.json`](../deploy/politica-evaluador.json). Permite listar y leer `edge-capturas/` y `modelos/` del bucket del P4; no permite escribir, borrar ni tocar otros recursos. Está validada con IAM Access Analyzer, sin hallazgos.
+2. **Darle solo lectura:** se le asigna únicamente [`deploy/politica-evaluador.json`](../deploy/politica-evaluador.json). Permite listar y leer `edge-capturas/`, `modelos/` y `models/` (paquete del modelo del P3) del bucket del P4; no permite escribir, borrar ni tocar otros recursos. Está validada con IAM Access Analyzer, sin hallazgos.
 3. **Configurar el acceso en la máquina de la demostración:** se crea una llave de acceso y se configura ahí como un perfil aparte. La llave **no se entrega por escrito ni por chat**.
 4. **Retirarlo:** al terminar la evaluación, se borran la llave y el usuario.
 

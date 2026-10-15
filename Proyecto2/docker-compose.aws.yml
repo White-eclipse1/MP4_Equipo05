@@ -62,7 +62,9 @@ services:
       - "0.0.0.0"
       - --port
       - "8000"
-      # Detras de Caddy: respeta X-Forwarded-Proto/For solo de la red interna.
+      # Detras de Caddy: confia en los encabezados X-Forwarded-* de CUALQUIER origen.
+      # Es aceptable porque la app no publica puertos: solo la alcanzan los contenedores
+      # de este compose (Caddy y los servicios internos), nunca un cliente de internet.
       - --proxy-headers
       - --forwarded-allow-ips
       - "*"
