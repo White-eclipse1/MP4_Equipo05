@@ -23,3 +23,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+
+# Salida local de modelo/convertir.py (pesos publicados en S3, ver docs/modelo-optimizado.md)
+/modelo/artefactos/
