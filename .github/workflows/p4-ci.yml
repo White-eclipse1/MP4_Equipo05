@@ -34,10 +34,10 @@ jobs:
       # `modelo/verificar_linaje.py` (VAL-01, #1) solo lee archivos versionados del P3
       # y del P4, asi que su prueba corre aqui sin pesos ni credenciales.
       - name: Ruff (lint)
-        run: ruff check src tests modelo/verificar_linaje.py
+        run: ruff check src tests modelo/verificar_linaje.py validacion
 
       - name: Ruff (formato)
-        run: ruff format --check src tests modelo/verificar_linaje.py
+        run: ruff format --check src tests modelo/verificar_linaje.py validacion
 
       - name: pytest
         run: pytest
