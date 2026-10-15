@@ -151,3 +151,18 @@ def test_configuracion_toma_los_hashes_de_la_conversion_verificada():
     assert cfg["modelos"]["original"]["sha256"].startswith("e4acca42")
     assert cfg["modelos"]["int8"]["sha256"].startswith("ba89ee43")
     assert cfg["modelos"]["int8"]["s3"].endswith("1.0.0-int8-e05.1/model_int8.onnx")
+
+
+def test_detecta_png_con_dimensiones_distintas_a_crops_jsonl(tmp_path):
+    from PIL import Image
+
+    bien, mal = tmp_path / "bien.png", tmp_path / "mal.png"
+    Image.new("RGB", (30, 20)).save(bien)
+    Image.new("RGB", (20, 30)).save(mal)
+    muestras = [
+        {"sample_id": "0.1.3:a1", "ruta": bien, "tamano": (30, 20)},
+        {"sample_id": "0.1.3:a2", "ruta": mal, "tamano": (30, 20)},
+    ]
+    assert comp.dimensiones_distintas(muestras) == [
+        {"sample_id": "0.1.3:a2", "esperado": (30, 20), "png": (20, 30)}
+    ]

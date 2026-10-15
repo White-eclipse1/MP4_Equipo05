@@ -126,7 +126,8 @@ def muestras_val(
     manifiesto: list[dict[str, Any]], recortes: Path, clases: list[str]
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """Filas `val` del manifiesto con su imagen, y las que faltan con su motivo."""
-    rutas = {r["crop_id"]: r["crop_path"] for r in leer_jsonl(recortes / "crops.jsonl")}
+    recortes_meta = {r["crop_id"]: r for r in leer_jsonl(recortes / "crops.jsonl")}
+    rutas = {cid: r["crop_path"] for cid, r in recortes_meta.items()}
     muestras, faltantes = [], []
     for fila in manifiesto:
         if fila["split"] != SPLIT:
@@ -146,9 +147,24 @@ def muestras_val(
                     "sample_id": cid,
                     "true_class": fila["category_name"],
                     "ruta": recortes / rutas[cid],
+                    "tamano": (recortes_meta[cid].get("width"), recortes_meta[cid].get("height")),
                 }
             )
     return muestras, faltantes
+
+
+def dimensiones_distintas(muestras: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Recortes cuyo PNG no mide lo que dice `crops.jsonl` (archivo equivocado o corrupto)."""
+    from PIL import Image
+
+    distintas = []
+    for m in muestras:
+        with Image.open(m["ruta"]) as imagen:
+            if imagen.size != tuple(m["tamano"]):
+                distintas.append(
+                    {"sample_id": m["sample_id"], "esperado": m["tamano"], "png": imagen.size}
+                )
+    return distintas
 
 
 def comprobar_calibracion(
@@ -311,6 +327,23 @@ def crear_predictores(cfg: dict[str, Any]) -> tuple[dict[str, Predictor], list[s
     )
 
 
+def procesador() -> str:
+    """Nombre del CPU: el resultado del INT8 en x86 depende de sus instrucciones (VNNI)."""
+    try:
+        if platform.system() == "Windows":
+            import winreg
+
+            clave = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, clave) as k:
+                return str(winreg.QueryValueEx(k, "ProcessorNameString")[0]).strip()
+        for linea in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
+            if linea.split(":")[0].strip() in ("model name", "Model", "Hardware"):
+                return linea.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or "desconocido"
+
+
 def descargar_modelos(cfg: dict[str, Any], perfil: str, bucket: str) -> None:
     """Baja de S3 los modelos que falten en local (luego se exige su SHA-256)."""
     import boto3
@@ -351,6 +384,10 @@ def main() -> None:
     muestras, faltantes = muestras_val(manifiesto, cfg["recortes"], clases)
     print(f"{len(muestras)} muestras de {SPLIT}; faltantes: {len(faltantes)}")
 
+    distintas = dimensiones_distintas(muestras)
+    if distintas:
+        raise SystemExit(f"FALLA: recortes con dimensiones distintas a crops.jsonl: {distintas}")
+
     filas = comparar(muestras, predictores, clases)
     datos = csv_bytes(filas, clases)
     verificacion = verificar_csv(datos, muestras, faltantes)
@@ -370,6 +407,7 @@ def main() -> None:
             "sha256": cfg["manifiesto"]["sha256"],
             "crops_jsonl_sha256": cfg["crops_jsonl_sha256"],
             "filas_val": len(muestras) + len(faltantes),
+            "recortes_con_dimensiones_de_crops_jsonl": len(muestras),
         },
         "modelos": {
             n: {
@@ -389,6 +427,7 @@ def main() -> None:
             "python": platform.python_version(),
             "sistema": platform.system(),
             "maquina": platform.machine(),
+            "procesador": procesador(),
             **entorno,
         },
     }
