@@ -16,7 +16,7 @@ modelo 1.0.0 del P3 → variante INT8 → cámara y clasificación local en el d
 | Diego Lemus (`D-Lemus`) | Cloud, portal e integración de punta a punta | INT-01 a INT-08 |
 | Josué (`JGO-07`) | Validación del modelo y benchmark | VAL-01 a VAL-08 |
 | Omar (`OmarCTMX`) | Dispositivo edge y cámara | EDGE-01 a EDGE-08 |
-| Mauricio (`White-eclipse1`) | ⏳ por confirmar | — |
+| Mauricio Figueroa (`White-eclipse1`) | PM: coordinación, seguimiento y entrega | — |
 
 ## Accesos
 
