@@ -1,36 +1,37 @@
-"""Verificacion del linaje del modelo (VAL-01; requisito M1 y criterio 1.1).
+"""Verificacion del linaje del modelo optimizado (VAL-01, issue #1; requisito M1, criterio 1.1).
 
 Reconstruye la cadena
 
-    modelo publicado 1.0.0 del P3  ->  registro de conversion  ->  variante 1.0.0-int8.1
+    model.pt 1.0.0 del P3  ->  registro de conversion  ->  variante 1.0.0-int8-e05.1
 
-y contrasta versiones, run_id, SHA-256, orden de clases y preprocesamiento entre
-fuentes independientes: lo que el P3 dejo en su repositorio (`selection.json`,
-`config/classes.yaml`, `transforms.py`, `publicacion_s3.md`, el reporte de
-evaluacion), la configuracion y el registro de la conversion del P4, y lo que
-`modelo/publish.py` subio a S3.
+y contrasta version, run_id, checkpoint, SHA-256, orden de clases y preprocesamiento
+entre fuentes independientes:
 
-Dos niveles:
+- lo que el P3 dejo en su repositorio: `docs/selection.json`, `docs/corridas.md`,
+  `docs/publicacion_s3.md`, `config/classes.yaml`, `src/p3/data/transforms.py`,
+  `src/p3/model/build.py` y el reporte de evaluacion en test del run;
+- la conversion del P4: `modelo/conversion.yaml`, `modelo/convertir.py`,
+  `modelo/preprocesar.py`, `modelo/registros/registro_conversion.json` y
+  `modelo/registros/calibracion_ids.jsonl`;
+- lo publicado en `s3://<bucket>/modelos/` (con `--profile`).
 
-- Sin argumentos ("registros"): solo lee archivos versionados; no necesita red,
-  pesos ni dependencias pesadas (stdlib + PyYAML). Ademas reconstruye byte a byte
-  `model_package.json` a partir del registro y compara su SHA-256 con el publicado.
-- `--profile <perfil>` ("s3"): ademas descarga de S3 el `model.pt` del P3 y los
-  objetos de la variante, recalcula sus SHA-256, compara su `VersionId` con el
-  registrado y lee el paquete del P3 (`registry.json`, `class_map.json`,
-  `preprocessing.json`, `model_version.json`). Necesita boto3 y un perfil con
-  lectura sobre el bucket del equipo. Como la politica de los integrantes no
-  incluye `s3:GetObjectVersion`, se descarga la version actual y se exige que su
-  `VersionId` sea el registrado (igual que `Proyecto3/scripts/publish_model.py`).
-- `--local`: recalcula el SHA-256 de las copias locales que existan (checkpoint
-  de `dvc pull` y `artifacts/<version>/`), sin red.
+Niveles:
 
-Las comprobaciones que el nivel elegido no puede ejecutar quedan como
-"pendiente", nunca como "ok". Sale con codigo 1 si alguna falla.
+- Sin argumentos ("registros"): solo archivos versionados; sin red, sin pesos y sin
+  dependencias pesadas (stdlib + PyYAML). Reconstruye byte a byte `model_package.json`
+  con las clases y el preprocesamiento del P3 y compara su SHA-256 con el del registro.
+- `--profile <perfil>` ("s3"): descarga de S3 el `model.pt` del P3 y los objetos de la
+  variante, recalcula sus SHA-256, los compara con el registro y con el metadato
+  `sha256` de cada objeto, y anota su `VersionId` en la evidencia. Necesita boto3.
+- `--local`: recalcula los SHA-256 de las copias locales que existan (checkpoint de
+  `dvc pull` en el P3 y `modelo/artefactos/<version>/`).
+
+Lo que el nivel elegido no puede comprobar queda "pendiente", nunca "ok". Sale con
+codigo 1 si alguna comprobacion falla.
 
 Uso (desde Proyecto4/):
     python modelo/verificar_linaje.py
-    python modelo/verificar_linaje.py --profile <perfil-aws>
+    python modelo/verificar_linaje.py --profile <perfil-de-la-cuenta-del-p4>
     python modelo/verificar_linaje.py --local
 """
 
@@ -49,122 +50,144 @@ from typing import Any
 
 import yaml
 
-ROOT = Path(__file__).resolve().parents[1]  # Proyecto4/
-P3 = ROOT.parent / "Proyecto3"
-RECORDS = ROOT / "modelo" / "registros"
+AQUI = Path(__file__).resolve().parent
+RAIZ = AQUI.parent  # Proyecto4/
+P3 = RAIZ.parent / "Proyecto3"
+REGISTROS = AQUI / "registros"
 
-# Lo que la tarea VAL-01 exige encontrar al final de la cadena.
-EXPECTED_P3_VERSION = "1.0.0"
-EXPECTED_VARIANT = "1.0.0-int8.1"
-EXPECTED_CLASSES = ["cat", "dog", "person"]
-P3_MODELS_PREFIX = "models/clasificador"
-EDGE_PREFIX = "models/clasificador-edge"
+# Lo que VAL-01 exige encontrar en los extremos de la cadena.
+VERSION_P3 = "1.0.0"
+VARIANTE = "1.0.0-int8-e05.1"
+CLASES = ["cat", "dog", "person"]
 
-OK, FAIL, PENDING = "ok", "falla", "pendiente"
+BUCKET = "p4-capturas-474665692638"
+PREFIJO_P3 = "modelos/clasificador-p3"
+PREFIJO_EDGE = "modelos/clasificador-edge"
+
+OK, FALLA, PENDIENTE = "ok", "falla", "pendiente"
 
 
 @dataclass
-class Check:
+class Comprobacion:
     id: str
     criterio: str
     estado: str
     detalle: str
 
 
-class Checks(list):
-    def add(self, check_id: str, criterio: str, ok: bool, detalle: str) -> None:
-        self.append(Check(check_id, criterio, OK if ok else FAIL, detalle))
+class Comprobaciones(list):
+    def agregar(self, id_: str, criterio: str, cumple: bool, detalle: str) -> None:
+        self.append(Comprobacion(id_, criterio, OK if cumple else FALLA, detalle))
 
-    def pending(self, check_id: str, criterio: str, detalle: str) -> None:
-        self.append(Check(check_id, criterio, PENDING, detalle))
-
-
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+    def pendiente(self, id_: str, criterio: str, detalle: str) -> None:
+        self.append(Comprobacion(id_, criterio, PENDIENTE, detalle))
 
 
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
+def sha256_bytes(datos: bytes) -> str:
+    return hashlib.sha256(datos).hexdigest()
 
 
-def read_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+def sha256(ruta: Path) -> str:
+    h = hashlib.sha256()
+    with ruta.open("rb") as archivo:
+        for bloque in iter(lambda: archivo.read(1 << 20), b""):
+            h.update(bloque)
+    return h.hexdigest()
 
 
-def read_yaml(path: Path) -> Any:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+def leer_json(ruta: Path) -> Any:
+    return json.loads(ruta.read_text(encoding="utf-8"))
 
 
-def module_constants(path: Path) -> dict[str, Any]:
+def leer_yaml(ruta: Path) -> Any:
+    return yaml.safe_load(ruta.read_text(encoding="utf-8"))
+
+
+def leer_texto(ruta: Path) -> str:
+    return ruta.read_text(encoding="utf-8")
+
+
+def constantes(ruta: Path) -> dict[str, Any]:
     """Constantes literales de un modulo sin importarlo (evita torch y numpy).
 
     `X = (0.1, 0.2)` da la tupla; `X = np.array([...], ...)` da su primer argumento.
     """
-    constants: dict[str, Any] = {}
-    for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        if not (isinstance(node, ast.Assign) and len(node.targets) == 1):
+    valores: dict[str, Any] = {}
+    for nodo in ast.parse(leer_texto(ruta)).body:
+        if not (isinstance(nodo, ast.Assign) and len(nodo.targets) == 1):
             continue
-        target = node.targets[0]
-        if not isinstance(target, ast.Name):
+        destino, valor = nodo.targets[0], nodo.value
+        if not isinstance(destino, ast.Name):
             continue
-        value = node.value
-        if isinstance(value, ast.Call) and value.args:
-            value = value.args[0]
+        if isinstance(valor, ast.Call) and valor.args:
+            valor = valor.args[0]
         try:
-            constants[target.id] = ast.literal_eval(value)
+            valores[destino.id] = ast.literal_eval(valor)
         except ValueError:
             continue
-    return constants
+    return valores
 
 
-def rebuild_model_package(cfg: dict, log: dict, newline: str) -> bytes:
-    """Mismo contenido que escribe `convert.py` en `model_package.json`.
-
-    `convert.py` usa `Path.write_text`, que en Windows traduce "\\n" a "\\r\\n";
-    por eso se prueba con los dos finales de linea.
-    """
-    variant = cfg["variant"]
-    meta = log["input"]
-    size = meta["preprocessing"]["image_size"]
-    class_map = {str(i): name for i, name in enumerate(meta["class_names"])}
-    package = {
-        "variant_version": variant["version"],
-        "source_p3_version": cfg["source"]["p3_version"],
-        "class_names": meta["class_names"],
-        "class_map": class_map,
-        "input": {
-            "name": variant["input_name"],
-            "shape": [1, 3, size, size],
-            "dtype": "float32",
-            "layout": "NCHW",
-            "channels": "RGB",
-        },
-        "output": {
-            "name": variant["output_name"],
-            "shape": [1, len(class_map)],
-            "meaning": "logits; softmax para confianza",
-        },
-        "preprocessing": meta["preprocessing"]
-        | {"implementation": "modelo/preprocess.py", "interpolation": "bilinear_antialias"},
-    }
-    text = json.dumps(package, indent=2, ensure_ascii=False) + "\n"
-    return text.replace("\n", newline).encode("utf-8")
-
-
-def p3_published_row(version: str) -> str | None:
-    """Fila de `version` en la tabla de versiones de `Proyecto3/docs/publicacion_s3.md`."""
-    for line in (P3 / "docs" / "publicacion_s3.md").read_text(encoding="utf-8").splitlines():
-        if line.startswith(f"| **{version}** |") or line.startswith(f"| {version} |"):
-            return line
+def fila_tabla(ruta: Path, inicio: str, columna: str) -> str | None:
+    """Celda `columna` de la fila de una tabla Markdown que empieza con `inicio`."""
+    encabezado: list[str] | None = None
+    for linea in leer_texto(ruta).splitlines():
+        celdas = [c.strip() for c in linea.strip().strip("|").split("|")]
+        if columna in celdas:
+            encabezado = celdas
+        elif encabezado and linea.startswith(inicio):
+            return celdas[encabezado.index(columna)].strip("`")
     return None
 
 
-def by_key(publication: dict) -> dict[str, dict]:
-    return {obj["key"].rsplit("/", 1)[-1]: obj for obj in publication["objects"]}
+def fila_publicacion_p3(version: str) -> str:
+    """Fila de `version` en la tabla de versiones de `Proyecto3/docs/publicacion_s3.md`."""
+    for linea in leer_texto(P3 / "docs" / "publicacion_s3.md").splitlines():
+        if linea.startswith((f"| **{version}** |", f"| {version} |")):
+            return linea
+    return ""
+
+
+def preprocesamiento_p3(run_id: str) -> dict[str, Any]:
+    """Preprocesamiento del run segun el P3, en el orden de claves de su checkpoint."""
+    transforms = constantes(P3 / "src" / "p3" / "data" / "transforms.py")
+    tamano = fila_tabla(P3 / "docs" / "corridas.md", f"| r10 | `{run_id}`", "image")
+    return {
+        "image_size": int(tamano) if tamano else None,
+        "resize": transforms["EVAL_RESIZE"],
+        "mean": list(transforms["IMAGENET_MEAN"]),
+        "std": list(transforms["IMAGENET_STD"]),
+    }
+
+
+def reconstruir_paquete(cfg: dict, registro: dict, clases: list[str], pre: dict) -> bytes:
+    """Mismos bytes que escribe `convertir.py` en `model_package.json` (UTF-8, LF)."""
+    origen, variante = cfg["origen"], cfg["variante"]
+    tamano = pre["image_size"]
+    paquete = {
+        "version": variante["version"],
+        "origen": {
+            "proyecto": "Proyecto 3",
+            "version": origen["version_p3"],
+            "run_id": origen["run_id"],
+            "sha256": registro["entrada"]["sha256"],
+        },
+        "archivo": registro["salidas"]["int8"]["archivo"],
+        "sha256": registro["salidas"]["int8"]["sha256"],
+        "entrada": {
+            "nombre": variante["entrada"],
+            "forma": [1, 3, tamano, tamano],
+            "tipo": "float32",
+            "orden": "NCHW, RGB",
+        },
+        "salida": {"nombre": variante["salida"], "forma": [1, len(clases)], "confianza": "softmax"},
+        "clases": clases,
+        "preprocesamiento": {
+            **pre,
+            "implementacion_edge": "modelo/preprocesar.py (numpy + Pillow, bilineal)",
+        },
+    }
+    return (json.dumps(paquete, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -172,258 +195,217 @@ def by_key(publication: dict) -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 
 
-def check_records(checks: Checks) -> dict[str, Any]:
-    cfg = read_yaml(ROOT / "modelo" / "conversion.yaml")
-    log = read_json(RECORDS / "conversion_log.json")
-    publication = read_json(RECORDS / "publicacion.json")
-    smoke = read_json(RECORDS / "smoke_test.json")
-    selection = read_json(P3 / "docs" / "selection.json")
-    p3_classes = read_yaml(P3 / "config" / "classes.yaml")
-    p3_transforms = module_constants(P3 / "src" / "p3" / "data" / "transforms.py")
-    p3_build = module_constants(P3 / "src" / "p3" / "model" / "build.py")
-    edge_pre = module_constants(ROOT / "modelo" / "preprocess.py")
-    src, inp = cfg["source"], log["input"]
-    published = by_key(publication)
-    run_id = src["run_id"]
+def comprobar_registros(c: Comprobaciones) -> dict[str, Any]:
+    cfg = leer_yaml(AQUI / "conversion.yaml")
+    registro = leer_json(REGISTROS / "registro_conversion.json")
+    seleccion = leer_json(P3 / "docs" / "selection.json")
+    clases_yaml = leer_yaml(P3 / "config" / "classes.yaml")
+    build_p3 = constantes(P3 / "src" / "p3" / "model" / "build.py")
+    edge = constantes(AQUI / "preprocesar.py")
+    convertir = leer_texto(AQUI / "convertir.py")
+    ficha_doc = leer_texto(RAIZ / "docs" / "modelo-optimizado.md")
+    origen, entrada = cfg["origen"], registro["entrada"]
+    int8, fp32 = registro["salidas"]["int8"], registro["salidas"]["fp32"]
+    run_id = origen["run_id"]
+    fila_p3 = fila_publicacion_p3(VERSION_P3)
 
     # 1. Version original 1.0.0
-    checks.add(
+    c.agregar(
         "origen.version",
-        "Se identifica model version original 1.0.0",
-        src["p3_version"] == inp["p3_version"] == EXPECTED_P3_VERSION
-        and src["s3_key"] == f"{P3_MODELS_PREFIX}/{EXPECTED_P3_VERSION}/model.pt",
-        f"conversion.yaml={src['p3_version']}, conversion_log={inp['p3_version']}, "
-        f"s3_key={src['s3_key']}",
+        "Se identifica la version original 1.0.0 del P3",
+        origen["version_p3"] == entrada["version_p3"] == VERSION_P3 and bool(fila_p3),
+        f"conversion.yaml={origen['version_p3']}, registro={entrada['version_p3']}; "
+        "publicada por el P3 en docs/publicacion_s3.md"
+        + ("" if fila_p3 else " (FILA NO ENCONTRADA)"),
     )
 
     # 2. run_id de MLflow
-    report = P3 / "reports" / "evaluation" / run_id / "metrics.json"
-    checks.add(
+    reporte = P3 / "reports" / "evaluation" / run_id / "metrics.json"
+    run_reporte = leer_json(reporte).get("run_id") if reporte.is_file() else None
+    c.agregar(
         "origen.run_id",
-        "Se identifica MLflow run_id de origen",
-        run_id == inp["run_id"] == selection["run_id"] and report.is_file(),
-        f"{run_id}: igual en conversion.yaml, conversion_log y Proyecto3/docs/selection.json "
-        f"(regla '{selection['rule']}', {selection['candidates']} candidatas); evaluacion en "
-        f"test del P3 en {report.relative_to(ROOT.parent).as_posix()}"
-        + ("" if report.is_file() else " (NO EXISTE)"),
+        "Se identifica el run_id de MLflow de origen",
+        run_id == entrada["run_id"] == seleccion["run_id"] == run_reporte and run_id in fila_p3,
+        f"{run_id}: igual en conversion.yaml, registro, Proyecto3/docs/selection.json (regla "
+        f"'{seleccion['rule']}', {seleccion['candidates']} candidatas), publicacion_s3.md y el "
+        "reporte de evaluacion en test del P3",
     )
 
     # 3. Checkpoint original
-    expected_uri = f"mlflow-artifacts:/3/{run_id}/artifacts/checkpoint/model.pt"
-    checks.add(
+    sufijo = f"{run_id}/artifacts/checkpoint/model.pt"
+    c.agregar(
         "origen.checkpoint",
-        "Se identifica checkpoint original",
-        selection["checkpoint_uri"] == expected_uri
-        and run_id in src["local_checkpoint"]
-        and inp["s3"] == f"s3://{src['s3_bucket']}/{src['s3_key']}"
-        and inp["s3_version_id"] == src["s3_version_id"],
-        f"MLflow {selection['checkpoint_uri']}; S3 {inp['s3']} (VersionId "
-        f"{src['s3_version_id']}); copia DVC {src['local_checkpoint']}",
+        "Se identifica el checkpoint original",
+        seleccion["checkpoint_uri"].endswith(sufijo)
+        and origen["checkpoint"].endswith(sufijo)
+        and entrada["archivo"] == origen["checkpoint"],
+        f"MLflow {seleccion['checkpoint_uri']}; copia DVC {origen['checkpoint']}",
     )
 
-    # 4. SHA-256 del original, contra lo que el P3 registro por su cuenta
-    p3_row = p3_published_row(EXPECTED_P3_VERSION) or ""
-    checks.add(
+    # 4. SHA-256 del original contra lo que el P3 registro por su cuenta
+    c.agregar(
         "origen.sha256_registros",
-        "SHA-256 del modelo original coincide en todas las fuentes",
-        src["sha256"] == inp["sha256"] == selection["checkpoint_sha256"] == smoke["source_sha256"]
-        and src["sha256"] in p3_row
-        and src["s3_version_id"] in p3_row
-        and run_id in p3_row,
-        f"{src['sha256']} ({inp['bytes']} bytes) en conversion.yaml, conversion_log, "
-        f"selection.json del P3, smoke_test.json y la tabla de Proyecto3/docs/publicacion_s3.md "
-        f"(junto con su VersionId y run_id)",
+        "El SHA-256 del original coincide en todas las fuentes",
+        origen["sha256"] == entrada["sha256"] == seleccion["checkpoint_sha256"]
+        and origen["sha256"] in fila_p3
+        and str(entrada["bytes"]) in ficha_doc.replace(" ", ""),
+        f"{origen['sha256']} ({entrada['bytes']} bytes) en conversion.yaml, registro, "
+        "selection.json y publicacion_s3.md del P3, y docs/modelo-optimizado.md",
     )
 
-    # 5. Variante 1.0.0-int8.1
-    int8 = log["outputs"]["int8"]
-    checks.add(
+    # 5. Variante
+    c.agregar(
         "variante.version",
-        "Se identifica variante 1.0.0-int8.1",
-        cfg["variant"]["version"]
-        == log["variant_version"]
-        == publication["variant_version"]
-        == smoke["variant_version"]
-        == EXPECTED_VARIANT
-        and publication["prefix"] == f"{EDGE_PREFIX}/{EXPECTED_VARIANT}/",
-        f"{EXPECTED_VARIANT} en conversion.yaml, conversion_log, publicacion.json y "
-        f"smoke_test.json; s3://{publication['bucket']}/{publication['prefix']}",
+        f"Se identifica la variante {VARIANTE}",
+        cfg["variante"]["version"] == registro["configuracion"]["variante"]["version"] == VARIANTE
+        and f"`{VARIANTE}`" in ficha_doc,
+        f"{VARIANTE} en conversion.yaml, registro y docs/modelo-optimizado.md",
     )
 
     # 6. SHA-256 de la variante
-    pub_int8 = published.get(int8["file"], {})
-    arm64 = (RECORDS / "arm64_check.txt").read_text(encoding="utf-8")
-    checks.add(
+    aceptado = f"P4_MODELOS_ACEPTADOS={VARIANTE}={int8['sha256']}"
+    c.agregar(
         "variante.sha256_registros",
-        "SHA-256 de la variante coincide en todas las fuentes",
-        int8["sha256"] == pub_int8.get("sha256") == smoke["int8_sha256"]
-        and int8["bytes"] == pub_int8.get("bytes")
-        and f"bytes={int8['bytes']} sha256={int8['sha256']}" in arm64,
-        f"{int8['file']} {int8['sha256']} ({int8['bytes']} bytes) en conversion_log, "
-        f"publicacion.json (VersionId {pub_int8.get('version_id')}), smoke_test.json y "
-        "arm64_check.txt",
+        "El SHA-256 de la variante coincide en todas las fuentes",
+        len(int8["sha256"]) == 64 and int8["sha256"] in ficha_doc and aceptado in ficha_doc,
+        f"{int8['archivo']} {int8['sha256']} ({int8['bytes']} bytes) en el registro, la ficha "
+        "y la linea P4_MODELOS_ACEPTADOS del receptor",
     )
 
-    # 7. Orden de clases: P3 (classes.yaml) -> checkpoint (conversion_log) -> paquete
-    p3_order = [
-        c["category_name"] for c in sorted(p3_classes["classes"], key=lambda c: c["class_index"])
+    # 7. Orden de clases: P3 (classes.yaml) -> receptor del P4
+    orden_p3 = [
+        x["category_name"] for x in sorted(clases_yaml["classes"], key=lambda x: x["class_index"])
     ]
-    checks.add(
+    receptor = constantes(RAIZ / "src" / "p4" / "capturas" / "config.py").get("CLASES_P3", "")
+    c.agregar(
         "clases.orden",
-        "Se conserva class order: cat, dog, person",
-        p3_order == inp["class_names"] == EXPECTED_CLASSES
-        and inp["architecture"]["num_classes"] == len(EXPECTED_CLASSES),
-        f"Proyecto3/config/classes.yaml={p3_order}; checkpoint (conversion_log)="
-        f"{inp['class_names']}; num_classes={inp['architecture']['num_classes']}",
+        "Se conserva el orden de clases cat, dog, person",
+        orden_p3 == CLASES
+        and receptor.split(",") == CLASES
+        and set(registro["calibracion"]["por_clase"]) == set(CLASES),
+        f"Proyecto3/config/classes.yaml={orden_p3}; receptor CLASES_P3={receptor!r}; "
+        "el paquete reconstruido (paquete.reconstruido) declara el mismo orden",
     )
 
-    # 8. Preprocesamiento: P3 transforms.py -> checkpoint -> preprocess.py del edge
-    pre = inp["preprocessing"]
-    p3_mean, p3_std = list(p3_transforms["IMAGENET_MEAN"]), list(p3_transforms["IMAGENET_STD"])
-    edge_src = (ROOT / "modelo" / "preprocess.py").read_text(encoding="utf-8")
-    checks.add(
+    # 8. Preprocesamiento: P3 -> preprocesar.py del edge
+    pre = preprocesamiento_p3(run_id)
+    c.agregar(
         "preprocesamiento",
-        "Se conserva preprocessing requerido",
-        pre["resize"] == p3_transforms["EVAL_RESIZE"]
-        and pre["mean"] == p3_mean == list(edge_pre["MEAN"])
-        and pre["std"] == p3_std == list(edge_pre["STD"])
-        and pre["image_size"] == edge_pre["IMAGE_SIZE"]
-        and 'convert("RGB")' in edge_src
-        and "Image.Resampling.BILINEAR" in edge_src,
-        f"checkpoint: {pre['image_size']}x{pre['image_size']} {pre['resize']}, mean "
-        f"{pre['mean']}, std {pre['std']}; igual a EVAL_RESIZE/IMAGENET_MEAN/IMAGENET_STD de "
-        f"Proyecto3/src/p3/data/transforms.py y a IMAGE_SIZE/MEAN/STD de modelo/preprocess.py "
-        f"(RGB, bilineal)",
+        "Se conserva el preprocesamiento requerido",
+        pre["image_size"] == edge["TAMANO"]
+        and pre["mean"] == list(edge["MEDIA"])
+        and pre["std"] == list(edge["DESVIACION"])
+        and pre["resize"] == "resize_to_square"
+        and 'convert("RGB")' in leer_texto(AQUI / "preprocesar.py")
+        and "Image.Resampling.BILINEAR" in leer_texto(AQUI / "preprocesar.py"),
+        f"P3: {pre['image_size']}x{pre['image_size']} (docs/corridas.md) {pre['resize']}, "
+        f"mean {pre['mean']}, std {pre['std']} (src/p3/data/transforms.py); igual a "
+        "TAMANO/MEDIA/DESVIACION de modelo/preprocesar.py (RGB, bilineal)",
     )
 
     # 9. Referencia al script y la configuracion de conversion
-    convert_src = (ROOT / "modelo" / "convert.py").read_text(encoding="utf-8")
-    lock = ROOT / "modelo" / "requirements-conversion.lock.txt"
-    q = cfg["quantization"]
-    tech = log["technique"]
-    checks.add(
+    cuant = cfg["cuantizacion"]
+    c.agregar(
         "conversion.referencia",
-        "Se conserva referencia al script/configuracion de conversion",
-        lock.is_file()
-        and 'default="modelo/conversion.yaml"' in convert_src
-        and all(tech[k] == v for k, v in q.items())
-        and tech["calibration_split"] == cfg["calibration"]["split"] == "train",
-        "modelo/convert.py (lee modelo/conversion.yaml por defecto) + "
-        "modelo/requirements-conversion.lock.txt; la tecnica del registro "
-        f"({tech['technique']}, {tech['format']}, per_channel={tech['per_channel']}) es la de "
-        "conversion.yaml",
+        "Se conserva la referencia al script y la configuracion de conversion",
+        (AQUI / "requirements-conversion.lock.txt").is_file()
+        and 'AQUI / "conversion.yaml"' in convertir
+        and registro["configuracion"] == cfg
+        and registro["comando"].endswith("modelo/convertir.py"),
+        "modelo/convertir.py (lee modelo/conversion.yaml) + requirements-conversion.lock.txt; "
+        f"el registro guarda la configuracion completa ({cuant['tecnica']}, {cuant['formato']}, "
+        f"pesos {cuant['pesos']}, activaciones {cuant['activaciones']}) y es igual a la versionada",
     )
 
     # 10. El registro identifica entrada y salida
-    io_ok = all(
-        isinstance(item.get("sha256"), str) and len(item["sha256"]) == 64 and item.get("bytes")
-        for item in (inp, log["outputs"]["fp32"], int8)
+    con_hash = all(
+        len(x.get("sha256", "")) == 64 and x.get("bytes") and x.get("archivo")
+        for x in (entrada, fp32, int8)
     )
-    checks.add(
+    c.agregar(
         "conversion.entrada_salida",
-        "El registro de conversion identifica input y output",
-        io_ok and bool(inp.get("s3")) and bool(int8.get("file")),
-        f"input: {inp['s3']} sha256 {inp['sha256'][:12]}...; outputs: "
-        f"{log['outputs']['fp32']['file']} {log['outputs']['fp32']['sha256'][:12]}..., "
-        f"{int8['file']} {int8['sha256'][:12]}...",
+        "El registro de conversion identifica entrada y salida",
+        con_hash and len(registro["salidas"]["model_package.json"]["sha256"]) == 64,
+        f"entrada {entrada['archivo']} {entrada['sha256'][:12]}...; salidas {fp32['archivo']} "
+        f"{fp32['sha256'][:12]}..., {int8['archivo']} {int8['sha256'][:12]}..., "
+        f"model_package.json {registro['salidas']['model_package.json']['sha256'][:12]}...",
     )
 
-    # 11. Los registros versionados son los mismos que se publicaron
-    mismatches = [
-        name
-        for name in ("conversion_log.json", "calibracion_manifest.jsonl", "smoke_test.json")
-        if sha256_file(RECORDS / name) != published.get(name, {}).get("sha256")
-    ]
-    checks.add(
-        "registros.publicados",
-        "Los registros en Git son byte a byte los publicados en S3",
-        not mismatches,
-        "conversion_log.json, calibracion_manifest.jsonl y smoke_test.json tienen el SHA-256 "
-        "de publicacion.json" + (f"; difieren: {mismatches}" if mismatches else ""),
-    )
-
-    # 12. El paquete publicado (clases + preprocesamiento del dispositivo) sale del registro
-    pkg_sha = log["package"]["sha256"]
-    rebuilt = {nl: sha256_bytes(rebuild_model_package(cfg, log, nl)) for nl in ("\n", "\r\n")}
-    match = [repr(nl) for nl, digest in rebuilt.items() if digest == pkg_sha]
-    checks.add(
+    # 11. El paquete que lee el dispositivo sale de las clases y el preprocesamiento del P3
+    paquete = reconstruir_paquete(cfg, registro, orden_p3, pre)
+    sha_paquete = registro["salidas"]["model_package.json"]["sha256"]
+    c.agregar(
         "paquete.reconstruido",
-        "model_package.json publicado se reconstruye desde conversion_log",
-        bool(match) and published.get("model_package.json", {}).get("sha256") == pkg_sha,
-        f"SHA-256 reconstruido {pkg_sha} (finales de linea {', '.join(match) or 'ninguno'}) "
-        "igual a conversion_log.package y publicacion.json: el paquete que lee el dispositivo "
-        "declara exactamente esas clases y ese preprocesamiento",
+        "model_package.json se reconstruye con las clases y el preprocesamiento del P3",
+        sha256_bytes(paquete) == sha_paquete,
+        f"SHA-256 reconstruido {sha256_bytes(paquete)} = registro {sha_paquete}: el paquete "
+        "del dispositivo declara exactamente esas clases, ese preprocesamiento, ese origen y ese "
+        "SHA-256 de la variante",
     )
 
-    # 13. Calibracion solo con train y con el manifiesto del P3
-    rows = [
-        json.loads(line)
-        for line in (RECORDS / "calibracion_manifest.jsonl")
-        .read_text(encoding="utf-8")
-        .splitlines()
-        if line
-    ]
-    per_class: dict[str, int] = {}
-    for row in rows:
-        per_class[row["category_name"]] = per_class.get(row["category_name"], 0) + 1
-    cal = log["calibration"]
-    checks.add(
+    # 12. Calibracion solo con train y nunca con el test del P3
+    filas = [json.loads(x) for x in leer_texto(REGISTROS / "calibracion_ids.jsonl").splitlines()]
+    por_clase: dict[str, int] = {}
+    for fila in filas:
+        por_clase[fila["clase"]] = por_clase.get(fila["clase"], 0) + 1
+    test_csv = P3 / "reports" / "evaluation" / run_id / "predictions_test.csv"
+    ids_test = {x.split(",", 1)[0] for x in leer_texto(test_csv).splitlines()[1:] if x}
+    ids_cal = [f["crop_id"] for f in filas]
+    cal = registro["calibracion"]
+    c.agregar(
         "calibracion.train",
-        "Calibracion solo con train del manifiesto del P3 seleccionado",
-        {r["split"] for r in rows} == {"train"}
-        and len(rows) == cfg["calibration"]["samples"] == tech["calibration_samples"]
-        and dict(sorted(per_class.items())) == cal["per_class"]
-        and cal["source_manifest_sha256"]
-        == cfg["calibration"]["manifest_hash"]
-        == selection["manifest_hash"]
-        and all(EXPECTED_CLASSES[r["class_index"]] == r["category_name"] for r in rows),
-        f"{len(rows)} recortes, todos de train ({per_class}); manifiesto "
-        f"{selection['manifest_id']} {cal['source_manifest_sha256'][:12]}..., el mismo con el que "
-        "se entreno el modelo seleccionado",
+        "La calibracion uso solo train y ninguna muestra del test del P3",
+        {f["split"] for f in filas} == {"train"}
+        and len(ids_cal) == len(set(ids_cal)) == cfg["calibracion"]["muestras"] == cal["muestras"]
+        and dict(sorted(por_clase.items())) == cal["por_clase"]
+        and sha256(REGISTROS / "calibracion_ids.jsonl") == cal["ids_sha256"]
+        and cfg["calibracion"]["manifiesto_sha256"] == seleccion["manifest_hash"]
+        and not set(ids_cal) & ids_test,
+        f"{len(ids_cal)} recortes unicos, todos de train ({dict(sorted(por_clase.items()))}); "
+        f"0 de los {len(ids_test)} IDs del test del P3; manifiesto "
+        f"{seleccion['manifest_id']}, el mismo con que se entreno el modelo seleccionado",
     )
 
-    # 14. No se sustituye el modelo del equipo por uno externo
-    checks.add(
+    # 13. No se sustituye el modelo del equipo por uno externo
+    c.agregar(
         "origen.no_externo",
         "No se sustituye el modelo del equipo por un modelo externo",
-        "from p3.model.build import load_checkpoint" in convert_src
-        and 'source_sha != cfg["source"]["sha256"]' in convert_src
-        and inp["architecture"]["name"] == p3_build["ARCHITECTURE"]
-        and log["checks"]["fp32_vs_torch_max_abs_logit_diff"] <= 1e-3,
-        "convert.py carga el checkpoint con load_checkpoint del P3 y se detiene si su SHA-256 "
-        f"no es el de conversion.yaml; arquitectura {inp['architecture']['name']} del P3; "
-        "ONNX FP32 igual a PyTorch (max |dlogit| "
-        f"{log['checks']['fp32_vs_torch_max_abs_logit_diff']:.1e})",
+        "from p3.model.build import load_checkpoint" in convertir
+        and 'if sha_original != origen["sha256"]' in convertir
+        and build_p3["ARCHITECTURE"] == "resnet18"
+        and registro["verificacion_rapida"]["max_dif_logits_fp32_vs_torch"] <= 1e-3,
+        "convertir.py carga el checkpoint con load_checkpoint del P3 y se detiene si su "
+        "SHA-256 no es el de conversion.yaml; ONNX FP32 igual a PyTorch (max |dlogit| "
+        f"{registro['verificacion_rapida']['max_dif_logits_fp32_vs_torch']:.1e})",
     )
 
     return {
         "cfg": cfg,
-        "log": log,
-        "publication": publication,
+        "registro": registro,
+        "paquete": paquete,
         "ficha": {
             "original": {
-                "version": src["p3_version"],
+                "version": origen["version_p3"],
                 "run_id": run_id,
-                "s3": inp["s3"],
-                "s3_version_id": src["s3_version_id"],
-                "mlflow": selection["checkpoint_uri"],
-                "sha256": src["sha256"],
-                "bytes": inp["bytes"],
+                "mlflow": seleccion["checkpoint_uri"],
+                "publicado_por_p3": "s3://dataset-quality-releases-750702272375/"
+                f"models/clasificador/{VERSION_P3}/model.pt",
+                "sha256": origen["sha256"],
+                "bytes": entrada["bytes"],
             },
             "variante": {
-                "version": log["variant_version"],
-                "s3": f"s3://{publication['bucket']}/{pub_int8.get('key')}",
-                "s3_version_id": pub_int8.get("version_id"),
+                "version": VARIANTE,
+                "archivo": int8["archivo"],
                 "sha256": int8["sha256"],
                 "bytes": int8["bytes"],
             },
-            "class_map": {str(i): name for i, name in enumerate(inp["class_names"])},
-            "preprocessing": pre,
+            "class_map": {str(i): nombre for i, nombre in enumerate(orden_p3)},
+            "preprocesamiento": pre,
             "conversion": {
-                "script": "modelo/convert.py",
-                "config": "modelo/conversion.yaml",
-                "registro": "modelo/registros/conversion_log.json",
-                "registro_sha256": published.get("conversion_log.json", {}).get("sha256"),
+                "script": "modelo/convertir.py",
+                "configuracion": "modelo/conversion.yaml",
+                "registro": "modelo/registros/registro_conversion.json",
+                "registro_sha256": sha256(REGISTROS / "registro_conversion.json"),
             },
         },
     }
@@ -434,28 +416,28 @@ def check_records(checks: Checks) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def check_local(checks: Checks, ctx: dict) -> None:
-    cfg, log = ctx["cfg"], ctx["log"]
-    checkpoint = (ROOT / cfg["source"]["local_checkpoint"]).resolve()
-    artifacts = ROOT / "artifacts" / log["variant_version"]
-    targets = [
-        ("local.original", "SHA-256 recalculado del model.pt local", checkpoint, log["input"]),
+def comprobar_local(c: Comprobaciones, ctx: dict) -> None:
+    registro = ctx["registro"]
+    artefactos = AQUI / "artefactos" / VARIANTE
+    objetivos = [
+        ("local.original", RAIZ / registro["entrada"]["archivo"], registro["entrada"]["sha256"]),
         *(
             (
-                f"local.{name}",
-                f"SHA-256 recalculado de {item['file']} local",
-                artifacts / item["file"],
-                item,
+                f"local.{n}",
+                artefactos / registro["salidas"][n]["archivo"],
+                registro["salidas"][n]["sha256"],
             )
-            for name, item in log["outputs"].items()
+            for n in ("fp32", "int8")
         ),
+        ("local.paquete", artefactos / "model_package.json", sha256_bytes(ctx["paquete"])),
     ]
-    for check_id, criterio, path, expected in targets:
-        if not path.is_file():
-            checks.pending(check_id, criterio, f"no existe {path}")
+    for id_, ruta, esperado in objetivos:
+        criterio = f"SHA-256 recalculado de {ruta.name} local"
+        if not ruta.is_file():
+            c.pendiente(id_, criterio, f"no existe {ruta}")
             continue
-        digest = sha256_file(path)
-        checks.add(check_id, criterio, digest == expected["sha256"], f"{path.name} {digest}")
+        obtenido = sha256(ruta)
+        c.agregar(id_, criterio, obtenido == esperado, f"{ruta.name} {obtenido}")
 
 
 # ---------------------------------------------------------------------------
@@ -463,147 +445,118 @@ def check_local(checks: Checks, ctx: dict) -> None:
 # ---------------------------------------------------------------------------
 
 
-def s3_get(s3: Any, bucket: str, key: str) -> tuple[bytes, str | None]:
-    response = s3.get_object(Bucket=bucket, Key=key)
-    return response["Body"].read(), response.get("VersionId")
+def descargar(s3: Any, bucket: str, llave: str) -> dict[str, Any]:
+    """SHA-256, bytes, VersionId y metadato `sha256` de un objeto, sin guardarlo."""
+    respuesta = s3.get_object(Bucket=bucket, Key=llave)
+    h, tamano, datos = hashlib.sha256(), 0, bytearray()
+    for bloque in respuesta["Body"].iter_chunks(1 << 20):
+        h.update(bloque)
+        tamano += len(bloque)
+        if tamano <= 1 << 20:  # los JSON se guardan para leerlos
+            datos.extend(bloque)
+    return {
+        "sha256": h.hexdigest(),
+        "bytes": tamano,
+        "version_id": respuesta.get("VersionId"),
+        "metadato_sha256": (respuesta.get("Metadata") or {}).get("sha256"),
+        "datos": bytes(datos),
+    }
 
 
-def s3_hash(s3: Any, bucket: str, key: str) -> tuple[str, int, str | None]:
-    response = s3.get_object(Bucket=bucket, Key=key)
-    digest, size = hashlib.sha256(), 0
-    for chunk in response["Body"].iter_chunks(1 << 20):
-        digest.update(chunk)
-        size += len(chunk)
-    return digest.hexdigest(), size, response.get("VersionId")
-
-
-def check_s3(checks: Checks, ctx: dict, s3: Any) -> None:
-    cfg, log, publication = ctx["cfg"], ctx["log"], ctx["publication"]
-    src = cfg["source"]
-    bucket = src["s3_bucket"]
-    p3_prefix = f"{P3_MODELS_PREFIX}/{src['p3_version']}"
-
-    digest, size, version_id = s3_hash(s3, bucket, src["s3_key"])
-    checks.add(
-        "s3.original",
-        "SHA-256 recalculado del model.pt publicado por el P3",
-        digest == src["sha256"]
-        and size == log["input"]["bytes"]
-        and version_id == src["s3_version_id"],
-        f"s3://{bucket}/{src['s3_key']} VersionId {version_id}, {size} bytes, sha256 {digest}",
-    )
-
-    registry = json.loads(s3_get(s3, bucket, f"{P3_MODELS_PREFIX}/registry.json")[0])
-    entry = next((e for e in registry["versions"] if e["version"] == src["p3_version"]), {})
-    checks.add(
-        "s3.registry_p3",
-        "registry.json del P3 apunta al mismo model.pt",
-        entry.get("run_id") == src["run_id"]
-        and entry.get("sha256") == src["sha256"]
-        and entry.get("key") == src["s3_key"]
-        and entry.get("s3_version_id") == src["s3_version_id"],
-        f"version {entry.get('version')}: run_id {entry.get('run_id')}, key {entry.get('key')}, "
-        f"VersionId {entry.get('s3_version_id')}; activa: {registry.get('active_version')}",
-    )
-
-    class_map = json.loads(s3_get(s3, bucket, f"{p3_prefix}/class_map.json")[0])
-    p3_order = [
-        c["category_name"] for c in sorted(class_map["classes"], key=lambda c: c["class_index"])
-    ]
-    preprocessing = json.loads(s3_get(s3, bucket, f"{p3_prefix}/preprocessing.json")[0])
-    model_version = json.loads(s3_get(s3, bucket, f"{p3_prefix}/model_version.json")[0])
-    checks.add(
-        "s3.paquete_p3",
-        "Clases y preprocesamiento del paquete 1.0.0 del P3 iguales a los de la conversion",
-        p3_order == log["input"]["class_names"] == EXPECTED_CLASSES
-        and preprocessing == log["input"]["preprocessing"]
-        and model_version["run_id"] == src["run_id"]
-        and model_version["files"]["model.pt"]["sha256"] == src["sha256"],
-        f"class_map.json={p3_order}; preprocessing.json={preprocessing}; model_version.json "
-        f"run_id {model_version['run_id']}",
-    )
-
-    for obj in publication["objects"]:
-        name = obj["key"].rsplit("/", 1)[-1]
-        digest, size, version_id = s3_hash(s3, publication["bucket"], obj["key"])
-        checks.add(
-            f"s3.variante.{name}",
-            f"SHA-256 recalculado de {name} publicado",
-            digest == obj["sha256"] and size == obj["bytes"] and version_id == obj["version_id"],
-            f"s3://{publication['bucket']}/{obj['key']} VersionId {version_id}, {size} bytes, "
-            f"sha256 {digest}",
+def comprobar_s3(c: Comprobaciones, ctx: dict, s3: Any, bucket: str) -> None:
+    registro = ctx["registro"]
+    salidas = registro["salidas"]
+    prefijo = f"{PREFIJO_EDGE}/{VARIANTE}"
+    esperados = {
+        f"{PREFIJO_P3}/{VERSION_P3}/model.pt": registro["entrada"]["sha256"],
+        f"{prefijo}/{salidas['int8']['archivo']}": salidas["int8"]["sha256"],
+        f"{prefijo}/{salidas['fp32']['archivo']}": salidas["fp32"]["sha256"],
+        f"{prefijo}/model_package.json": salidas["model_package.json"]["sha256"],
+        f"{prefijo}/registro_conversion.json": sha256(REGISTROS / "registro_conversion.json"),
+        f"{prefijo}/calibracion_ids.jsonl": sha256(REGISTROS / "calibracion_ids.jsonl"),
+    }
+    publicados: dict[str, dict[str, Any]] = {}
+    for llave, esperado in esperados.items():
+        obj = descargar(s3, bucket, llave)
+        publicados[llave] = {k: v for k, v in obj.items() if k != "datos"}
+        metadato = obj["metadato_sha256"]
+        c.agregar(
+            f"s3.{llave.rsplit('/', 1)[-1]}",
+            f"SHA-256 recalculado de {llave.rsplit('/', 1)[-1]} publicado",
+            obj["sha256"] == esperado and metadato in (None, esperado),
+            f"s3://{bucket}/{llave} VersionId {obj['version_id']}, {obj['bytes']} bytes, sha256 "
+            f"{obj['sha256']}" + (f", metadato sha256 {metadato}" if metadato else ""),
         )
+        if llave.endswith("model_package.json"):
+            paquete = json.loads(obj["datos"])
 
-    package = json.loads(
-        s3_get(s3, publication["bucket"], f"{publication['prefix']}model_package.json")[0]
+    c.agregar(
+        "s3.paquete_contenido",
+        "model_package.json publicado declara el origen, las clases y el SHA-256 de la variante",
+        paquete["clases"] == CLASES
+        and paquete["origen"]["run_id"] == registro["entrada"]["run_id"]
+        and paquete["origen"]["sha256"] == registro["entrada"]["sha256"]
+        and paquete["sha256"] == salidas["int8"]["sha256"],
+        f"clases {paquete['clases']}; origen {paquete['origen']['version']} run "
+        f"{paquete['origen']['run_id'][:12]}...; variante {paquete['sha256'][:12]}...",
     )
-    checks.add(
-        "s3.model_package",
-        "model_package.json publicado declara las clases y el preprocesamiento del P3",
-        package["class_names"] == EXPECTED_CLASSES
-        and package["source_p3_version"] == src["p3_version"]
-        and all(package["preprocessing"][k] == v for k, v in log["input"]["preprocessing"].items()),
-        f"class_map {package['class_map']}; source_p3_version {package['source_p3_version']}",
-    )
-
-
-def pending_binaries(checks: Checks) -> None:
-    checks.pending(
-        "binarios.sha256",
-        "SHA-256 recalculado sobre los binarios (model.pt y model_int8.onnx)",
-        "este nivel solo lee registros; correr con --profile <perfil del equipo> o --local",
-    )
+    ctx["ficha"]["publicacion"] = {"bucket": bucket, "objetos": publicados}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--profile", help="perfil de AWS con lectura sobre el bucket del equipo")
+    parser.add_argument("--profile", help="perfil de AWS con lectura sobre el bucket del P4")
+    parser.add_argument("--bucket", default=BUCKET)
     parser.add_argument("--local", action="store_true", help="recalcular SHA-256 de copias locales")
-    parser.add_argument("--out", default="modelo/registros/linaje_verificacion.json")
+    parser.add_argument("--salida", default="modelo/registros/linaje_verificacion.json")
     args = parser.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
 
-    checks = Checks()
-    ctx = check_records(checks)
-    levels = ["registros"]
+    c = Comprobaciones()
+    ctx = comprobar_registros(c)
+    niveles = ["registros"]
     if args.local:
-        check_local(checks, ctx)
-        levels.append("local")
+        comprobar_local(c, ctx)
+        niveles.append("local")
     if args.profile:
         import boto3
 
-        session = boto3.Session(profile_name=args.profile)
-        identity = session.client("sts").get_caller_identity()["Arn"]
-        check_s3(checks, ctx, session.client("s3"))
-        levels.append(f"s3 ({identity})")
-    if not args.local and not args.profile:
-        pending_binaries(checks)
+        sesion = boto3.Session(profile_name=args.profile)
+        identidad = sesion.client("sts").get_caller_identity()["Arn"]
+        comprobar_s3(c, ctx, sesion.client("s3"), args.bucket)
+        niveles.append(f"s3 ({identidad})")
+    else:
+        c.pendiente(
+            "s3.binarios",
+            "SHA-256 recalculado sobre los objetos publicados en S3",
+            "este nivel no consulta S3; correr con --profile <perfil de la cuenta del P4>",
+        )
 
-    summary = {state: sum(c.estado == state for c in checks) for state in (OK, FAIL, PENDING)}
-    record = {
-        "schema_version": 1,
-        "tarea": "VAL-01",
+    resumen = {estado: sum(x.estado == estado for x in c) for estado in (OK, FALLA, PENDIENTE)}
+    evidencia = {
+        "schema_version": 2,
+        "tarea": "VAL-01 (#1)",
         "verificado_en": datetime.now(UTC).isoformat(timespec="seconds"),
-        "niveles": levels,
-        "resumen": summary,
-        "linaje_verificado": summary[FAIL] == 0,
+        "niveles": niveles,
+        "resumen": resumen,
+        "linaje_verificado": resumen[FALLA] == 0 and resumen[PENDIENTE] == 0,
         "ficha": ctx["ficha"],
-        "comprobaciones": [asdict(c) for c in checks],
-        "entorno": {"python": platform.python_version(), "platform": platform.platform()},
+        "comprobaciones": [asdict(x) for x in c],
+        "entorno": {"python": platform.python_version(), "sistema": platform.system()},
     }
-    out = (ROOT / args.out).resolve()
-    out.write_text(
-        json.dumps(record, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+    destino = RAIZ / args.salida
+    destino.write_bytes(
+        (json.dumps(evidencia, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     )
 
-    for check in checks:
-        print(f"[{check.estado:9}] {check.id}: {check.criterio}")
-        if check.estado != OK:
-            print(f"            {check.detalle}")
-    print(f"\n{summary} -> {out.relative_to(ROOT).as_posix()}")
-    if summary[FAIL]:
+    for x in c:
+        print(f"[{x.estado:9}] {x.id}: {x.criterio}")
+        if x.estado != OK:
+            print(f"            {x.detalle}")
+    print(f"\n{resumen} -> {destino.relative_to(RAIZ).as_posix()}")
+    if resumen[FALLA]:
         raise SystemExit(1)
 
 
