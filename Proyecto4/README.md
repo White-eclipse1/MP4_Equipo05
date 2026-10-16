@@ -109,9 +109,11 @@ Instalación, recursos creados y operación por Session Manager: [`docs/desplieg
 |---|---|---|
 | Conversión y linaje | `python modelo/verificar_linaje.py` | ✅ |
 | Contrato del receptor (5 respuestas) | `python scripts/enviar_prueba.py --profile <perfil>` → [`evidencias/int-02/`](evidencias/int-02/) | ✅ |
-| Captura persistida en AWS | `python scripts/consultar_captura.py <capture_id> --profile p4-lectura` | ✅ con la captura de prueba |
+| Captura persistida en AWS | `python scripts/consultar_captura.py <capture_id> --profile p4-lectura` → [`evidencias/int-03/`](evidencias/int-03/) | ✅ con capturas de prueba |
+| Capturas Edge con datos de AWS | Portal → Capturas Edge, comparado con la consulta anterior → [`evidencias/int-05/`](evidencias/int-05/) | ✅ con capturas de prueba |
+| Benchmark en el dispositivo | `python validacion/verificar_benchmark.py` → [`evidencias/VAL-05/`](evidencias/VAL-05/) | ✅ |
 | Pruebas automáticas del receptor | `pytest` en `Proyecto4/` (CI: `p4-ci.yml`) | ✅ |
-| Inferencia en entradas conocidas en el dispositivo | ⏳ VAL-07 / EDGE-03 | ⏳ |
+| Inferencia en entradas conocidas en el dispositivo | Una foto por clase en [`evidencias/EDGE-03/`](evidencias/EDGE-03/); ⏳ equivalencia con entradas conocidas (VAL-07) | 🟡 |
 
 ## Demostración
 
