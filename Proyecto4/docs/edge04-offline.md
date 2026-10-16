@@ -1,5 +1,36 @@
 # EDGE-04 — Clasificación local sin Internet
 
+## Evidencia principal para revisión
+
+La sesión válida para la clasificación sin Internet es
+**`cd3cfa51a5fe4be2ba79cce6a61c7016` (PID 5663)** del 16 de octubre de 2026.
+Se encuentra en [corrida-final/offline.jsonl](../evidencias/EDGE-04/corrida-final/offline.jsonl).
+
+| Hito | Hora local (UTC−06:00) | Evidencia |
+|---|---|---|
+| Modelo cargado y hash verificado | 01:16:42 | Una sola carga, CPUExecutionProvider |
+| Estado sin Internet previo | 01:19:49 | [red-offline-antes.txt](../evidencias/EDGE-04/corrida-final/red-offline-antes.txt) |
+| Captura nueva de gato, resultado cat | 01:20:02 | Confianza 0.8389561176300049, capture_id edge01-08a24c7015864f81b5b39a73a8f5b740 |
+| Captura nueva de perro, resultado dog | 01:20:14 | Confianza 0.6013272404670715, capture_id edge01-d9a833fcac934a4580ef577e0e177140 |
+| Estado sin Internet posterior | 01:20:39 | [red-offline-despues.txt](../evidencias/EDGE-04/corrida-final/red-offline-despues.txt) |
+
+Los dos registros de red rodean las capturas y muestran Wi-Fi inactivo,
+Ethernet desconectado y fallo de resolución DNS, conservando el enlace local USB.
+Los JPEG corresponden a imágenes de gato y perro presentadas en pantalla.
+La sesión y el PID se mantienen; fotos y resultados quedan guardados localmente.
+
+Esta sesión respalda la clasificación sin Internet de EDGE-04. No demuestra por
+sí sola una reconexión efectiva posterior. Para la demo final EDGE-08 se requiere
+una secuencia completa: carga, corte documentado, dos capturas, HTTP exitoso
+antes de la tercera y misma sesión hasta finalizar.
+
+Los archivos de la raíz de `evidencias/EDGE-04/` corresponden a intentos anteriores;
+los de `corrida-final/` corresponden a las sesiones posteriores. Los registros
+de red homónimos deben identificarse por su ruta completa y fecha. Se conservan
+sus ubicaciones originales para no invalidar referencias de los PR existentes.
+
+## Funcionamiento
+
 `edge/offline.py` reutiliza la cámara de EDGE-02 y el modelo de EDGE-03. Carga y
 verifica el ONNX una sola vez, antes de solicitar la desconexión. Después solicita
 dos capturas nuevas sin Internet y una tercera tras reconectar, usando la misma
@@ -66,7 +97,7 @@ de carga previa al corte, resultados y controles de conectividad. Los resultados
 deben persistir aunque no haya forma de enviarlos. La ejecución física debe
 respaldarse con los registros y controles de red de la misma sesión.
 
-### Revisión de evidencias recibidas
+### Intentos anteriores: archivos de la raíz
 
 En `evidencias/EDGE-04/` se recibieron seis JPEG con sus JSON, el log de dos
 sesiones completas y un intento fallido, dos registros de red, una comprobación
@@ -98,12 +129,11 @@ La evidencia de red todavía no acredita toda la secuencia:
   radio Wi-Fi habilitada; no demuestra por sí sola asociación ni acceso a Internet.
   El registro de red de las 00:34 sí muestra wlan0 DORMANT.
 
-La evidencia nueva respalda el aislamiento del teléfono. Para documentar una
-secuencia completamente correlacionada falta el estado de red de la sesión
-utilizada y acceso externo exitoso antes de la captura posterior a reconectar.
+Estas fotografías de conectividad corresponden al primer intento (00:30–00:53),
+no a la sesión principal de las 01:16–01:23; no se atribuyen a esa sesión.
 Los archivos actuales se conservan como evidencia de los intentos originales.
 
-### Corridas adicionales recibidas
+### Sesiones de corrida-final y sus límites
 
 `corrida-final/offline.jsonl` contiene otras dos sesiones completas. Sus seis
 JPEG se verificaron contra los JSON y hashes del log:
@@ -120,8 +150,13 @@ es posterior a la terminación de esa sesión.
 
 Para la segunda sesión, `red-reconectada.txt` contiene HTTP/2 200 a las 01:28:45,
 antes de la tercera captura de las 01:29:16, con el mismo PID y session_id. No se
-recibió registro de red offline específico de esta segunda sesión. La fase offline
-está declarada por el operador; los TXT de las 01:19 y 01:20 no se atribuyen a ella.
+recibió registro de red offline específico de esta segunda sesión. Además,
+`red-reconectada-ok.txt` registra HTTP/2 200 a las 01:26:37, antes de que comience
+la sesión. Por tanto, **la sesión 18d0efd2 no acredita clasificación sin Internet**:
+la etiqueta `sin_internet` del log es una declaración manual sin corroboración;
+las capturas pudieron realizarse con conectividad activa. Se conserva esa etiqueta
+como parte del log original, no como prueba de aislamiento. Los TXT de las 01:19
+y 01:20 pertenecen exclusivamente a cd3cfa51.
 No se mezclan las dos sesiones para afirmar una única corrida totalmente
 correlacionada. Se conserva el último resultado incorrecto y el empate de logits
 cat/dog sin modificarlo.
