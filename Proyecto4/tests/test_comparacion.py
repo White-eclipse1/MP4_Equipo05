@@ -226,3 +226,56 @@ def test_inventario_detecta_etag_que_no_es_el_md5(recortes):
     del objetos["dog/0.1.3_a2.png"]
     _, problemas, _ = inv.inventario(recortes, MANIFIESTO, objetos)
     assert len(problemas) == 2
+
+
+def evidencia_valida() -> dict:
+    return {
+        "verificacion": {"ok": True},
+        "calibracion": {"solo_train": True, "fuera_de_train": []},
+        "resumen": {"clases_presentes": True},
+        "huella_p3": {"ok": True},
+    }
+
+
+def test_fallas_enumera_cada_validacion_incumplida():
+    assert comp.fallas(evidencia_valida()) == []
+    mala = evidencia_valida()
+    mala["verificacion"]["ok"] = False
+    mala["calibracion"] = {"solo_train": False, "fuera_de_train": ["0.1.3:a3"]}
+    mala["resumen"]["clases_presentes"] = False
+    mala["huella_p3"]["ok"] = False
+    assert len(comp.fallas(mala)) == 4
+
+
+def test_corrida_invalida_no_toca_la_evidencia_existente(tmp_path):
+    csv_bueno, json_bueno = tmp_path / comp.ARCHIVO_CSV, tmp_path / comp.ARCHIVO_JSON
+    csv_bueno.write_bytes(b"evidencia buena\n")
+    json_bueno.write_bytes(b'{"buena": true}\n')
+    mala = evidencia_valida()
+    mala["huella_p3"]["ok"] = False
+
+    with pytest.raises(comp.ComparacionError, match="queda intacta"):
+        comp.guardar(tmp_path, b"resultado incompleto\n", mala)
+    assert csv_bueno.read_bytes() == b"evidencia buena\n"
+    assert json_bueno.read_bytes() == b'{"buena": true}\n'
+
+
+def test_corrida_valida_escribe_csv_y_json_sin_temporales(tmp_path):
+    comp.guardar(tmp_path / "resultados", b"sample_id\n", evidencia_valida())
+    destino = tmp_path / "resultados"
+    assert (destino / comp.ARCHIVO_CSV).read_bytes() == b"sample_id\n"
+    assert json.loads((destino / comp.ARCHIVO_JSON).read_text("utf-8"))["huella_p3"]["ok"]
+    assert sorted(p.name for p in destino.iterdir()) == [comp.ARCHIVO_CSV, comp.ARCHIVO_JSON]
+
+
+def test_falla_al_escribir_no_deja_temporales_ni_reemplaza(tmp_path, monkeypatch):
+    (tmp_path / comp.ARCHIVO_CSV).write_bytes(b"evidencia buena\n")
+
+    def falla_disco(*_args):
+        raise OSError("disco lleno")
+
+    monkeypatch.setattr(comp.os, "replace", falla_disco)
+    with pytest.raises(OSError):
+        comp.guardar(tmp_path, b"nuevo\n", evidencia_valida())
+    assert (tmp_path / comp.ARCHIVO_CSV).read_bytes() == b"evidencia buena\n"
+    assert [p.name for p in tmp_path.iterdir()] == [comp.ARCHIVO_CSV]

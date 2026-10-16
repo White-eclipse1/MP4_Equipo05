@@ -21,11 +21,12 @@ preprocesamiento (original -> fp32).
 El mismo `model_int8.onnx` se corre dos veces:
 
 - `int8`: con las optimizaciones por defecto de onnxruntime, que funden los pares QDQ en
-  kernels enteros. Es lo que ejecuta el runtime en esta maquina, pero en x86 sin VNNI el
-  formato U8S8 puede saturar y el resultado depende del CPU (se registra su nombre).
+  kernels enteros. Es lo que ejecuta el runtime en esta maquina. Su resultado puede
+  cambiar de CPU a CPU (por eso se registra su nombre); la causa no esta confirmada
+  (hipotesis: saturacion U8S8 en x86 sin VNNI, ver docs/comparacion-modelos.md).
 - `int8_referencia`: con las optimizaciones apagadas, cada QuantizeLinear/DequantizeLinear
-  se ejecuta tal cual y la convolucion en float. Es la aritmetica que define el grafo:
-  no depende del CPU y sirve para contrastar la medicion del dispositivo.
+  se ejecuta tal cual y la convolucion en float. Es la aritmetica que define el grafo,
+  sin kernels enteros fusionados, y sirve para contrastar la medicion del dispositivo.
 
 Antes de correr, exige el SHA-256 del manifiesto, de `crops.jsonl` y de los tres
 modelos (los de `modelo/conversion.yaml` y `modelo/registros/registro_conversion.json`),
@@ -48,6 +49,7 @@ import hashlib
 import io
 import json
 import math
+import os
 import platform
 import sys
 from collections import Counter
@@ -64,6 +66,8 @@ MODELO = RAIZ / "modelo"
 P3 = RAIZ.parent / "Proyecto3"
 RESULTADOS = AQUI / "resultados"
 REGISTROS_VAL = AQUI / "registros"
+ARCHIVO_CSV = "comparacion_val.csv"
+ARCHIVO_JSON = "comparacion_val.json"
 
 SPLIT = "val"
 MODELOS = ("original", "fp32", "int8", "int8_referencia")
@@ -407,7 +411,7 @@ def crear_predictores(cfg: dict[str, Any]) -> tuple[dict[str, Predictor], list[s
 
 
 def procesador() -> str:
-    """Nombre del CPU: el resultado del INT8 en x86 depende de sus instrucciones (VNNI)."""
+    """Nombre del CPU: el resultado de los kernels enteros del INT8 puede cambiar con el CPU."""
     try:
         if platform.system() == "Windows":
             import winreg
@@ -450,6 +454,52 @@ def descargar(cfg: dict[str, Any], perfil: str, bucket: str) -> None:
                 if not destino.is_file():
                     destino.parent.mkdir(parents=True, exist_ok=True)
                     s3.download_file(bucket, objeto["Key"], str(destino))
+
+
+def fallas(evidencia: dict[str, Any]) -> list[str]:
+    """Validaciones de VAL-02 que la corrida no cumple (vacia si la evidencia es valida)."""
+    problemas = []
+    if not evidencia["verificacion"]["ok"]:
+        problemas.append("el CSV no tiene exactamente los IDs y etiquetas de val")
+    if not evidencia["calibracion"]["solo_train"]:
+        fuera = evidencia["calibracion"]["fuera_de_train"]
+        problemas.append(f"la calibracion usa IDs fuera de train: {fuera}")
+    if not evidencia["resumen"]["clases_presentes"]:
+        problemas.append("no estan todas las clases en val")
+    if not evidencia["huella_p3"]["ok"]:
+        problemas.append("el original no reproduce el val_accuracy/val_loss del P3")
+    return problemas
+
+
+def guardar(destino: Path, datos: bytes, evidencia: dict[str, Any]) -> None:
+    """Escribe CSV y JSON solo si la corrida es valida, sin dejar evidencia a medias.
+
+    Si alguna validacion falla no toca los archivos existentes. Si pasa, escribe cada
+    archivo en un temporal del mismo directorio y despues lo renombra (`os.replace` es
+    atomico por archivo): una corrida interrumpida no deja un CSV o un JSON a medias. El
+    CSV se reemplaza antes que el JSON y el JSON guarda el SHA-256 del CSV, asi que si
+    algo cortara la ejecucion entre los dos renombres, el par desparejo se detecta.
+    """
+    problemas = fallas(evidencia)
+    if problemas:
+        raise ComparacionError(
+            "no se escribio evidencia; la anterior queda intacta: " + "; ".join(problemas)
+        )
+    destino.mkdir(parents=True, exist_ok=True)
+    salidas = {
+        ARCHIVO_CSV: datos,
+        ARCHIVO_JSON: (json.dumps(evidencia, ensure_ascii=False, indent=2) + "\n").encode(),
+    }
+    temporales = {}
+    try:
+        for nombre, contenido in salidas.items():
+            temporales[nombre] = destino / f".{nombre}.tmp"
+            temporales[nombre].write_bytes(contenido)
+        for nombre, temporal in temporales.items():
+            os.replace(temporal, destino / nombre)
+    finally:
+        for temporal in temporales.values():
+            temporal.unlink(missing_ok=True)
 
 
 def main() -> None:
@@ -498,9 +548,7 @@ def main() -> None:
     datos = csv_bytes(filas, clases)
     verificacion = verificar_csv(datos, muestras, faltantes)
 
-    RESULTADOS.mkdir(parents=True, exist_ok=True)
-    ruta_csv = RESULTADOS / "comparacion_val.csv"
-    ruta_csv.write_bytes(datos)
+    # Todo se arma en memoria; solo se escribe si la corrida pasa todas las validaciones.
     evidencia = {
         "schema_version": 1,
         "tarea": "VAL-02 (#2)",
@@ -531,17 +579,17 @@ def main() -> None:
             for n, m in cfg["modelos"].items()
         },
         "columnas_int8": {
-            "int8": "onnxruntime con optimizaciones por defecto (kernels enteros); depende del "
-            "CPU en x86: U8S8 puede saturar sin VNNI",
+            "int8": "onnxruntime con optimizaciones por defecto (kernels enteros fusionados); "
+            "puede cambiar con el CPU. Hipotesis sin confirmar: saturacion U8S8 en x86 sin VNNI",
             "int8_referencia": "mismo model_int8.onnx con ORT_DISABLE_ALL: QDQ ejecutado tal "
-            "cual, independiente del CPU",
+            "cual, sin kernels enteros fusionados",
             "optimized_prediction": "igual a int8_prediction",
         },
         "calibracion": calibracion,
         "verificacion": verificacion,
         "resumen": resumen(filas, clases),
         "huella_p3": huella_p3(filas, cfg["seleccion_p3"]),
-        "csv": {"archivo": ruta_csv.name, "sha256": hashlib.sha256(datos).hexdigest()},
+        "csv": {"archivo": ARCHIVO_CSV, "sha256": hashlib.sha256(datos).hexdigest()},
         "entorno": {
             "python": platform.python_version(),
             "sistema": platform.system(),
@@ -550,10 +598,6 @@ def main() -> None:
             **entorno,
         },
     }
-    (RESULTADOS / "comparacion_val.json").write_bytes(
-        (json.dumps(evidencia, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-    )
-
     r = evidencia["resumen"]
     print(f"accuracy: {r['accuracy']}")
     print(f"acuerdo int8/original: {r['acuerdo_int8_vs_original']}/{r['muestras']}")
@@ -565,10 +609,11 @@ def main() -> None:
         f"{huella['val_loss']['recalculada']:.7f} (P3 {huella['val_loss']['p3']:.7f}); "
         f"ok: {huella['ok']}"
     )
-    if not (
-        verificacion["ok"] and calibracion["solo_train"] and r["clases_presentes"] and huella["ok"]
-    ):
-        raise SystemExit(1)
+    try:
+        guardar(RESULTADOS, datos, evidencia)
+    except ComparacionError as error:
+        raise SystemExit(f"FALLA: {error}") from error
+    print(f"Evidencia escrita en {RESULTADOS.relative_to(RAIZ).as_posix()}/")
 
 
 if __name__ == "__main__":
