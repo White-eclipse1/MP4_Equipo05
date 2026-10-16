@@ -1,6 +1,6 @@
 """Consulta de SOLO LECTURA de una captura en S3, para la demostracion (INT-03, INT-06, INT-07).
 
-    python Proyecto4/scripts/consultar_captura.py <capture_id> --profile p4-equipo
+    python Proyecto4/scripts/consultar_captura.py <capture_id> --profile p4-lectura
 
 Muestra, con las mismas llamadas que podria hacer el evaluador:
 1. quien consulta (`sts get-caller-identity`);
