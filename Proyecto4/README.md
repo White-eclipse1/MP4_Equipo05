@@ -105,7 +105,7 @@ Instalación, recursos creados y operación por Session Manager: [`docs/desplieg
 |---|---|---|
 | Conversión y linaje | `python modelo/verificar_linaje.py` | ✅ |
 | Contrato del receptor (5 respuestas) | `python scripts/enviar_prueba.py --profile <perfil>` → [`evidencias/int-02/`](evidencias/int-02/) | ✅ |
-| Captura persistida en AWS | `python scripts/consultar_captura.py <capture_id> --profile <perfil>` | ✅ con la captura de prueba |
+| Captura persistida en AWS | `python scripts/consultar_captura.py <capture_id> --profile p4-lectura` | ✅ con la captura de prueba |
 | Pruebas automáticas del receptor | `pytest` en `Proyecto4/` (CI: `p4-ci.yml`) | ✅ |
 | Inferencia en entradas conocidas en el dispositivo | ⏳ VAL-07 / EDGE-03 | ⏳ |
 

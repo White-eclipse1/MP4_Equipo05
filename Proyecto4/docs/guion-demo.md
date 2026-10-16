@@ -22,10 +22,10 @@ Sigue el orden en que la rúbrica observa el recorrido ([`rubrica.md`](rubrica.m
   ```powershell
   aws ssm get-parameter --name /p4/portal-evaluador --with-decryption --query Parameter.Value --output text --profile p4-equipo --region us-east-1
   ```
-- [ ] Sesión de AWS vigente: `aws sts get-caller-identity --profile p4-equipo`. Si caducó, `aws login --profile p4-equipo`. **Dura máximo 12 horas: renovarla la mañana de la demo.**
+- [ ] Sesiones de AWS vigentes: `p4-lectura` (consultas de S3 en la demo, solo lectura) y `p4-equipo` (solo para leer secretos y operar la EC2). Comprobar con `aws sts get-caller-identity --profile <perfil>`; si caducó, `aws login --profile <perfil>`. **Duran máximo 12 horas: renovarlas la mañana de la demo.**
 - [ ] Consulta de solo lectura probada con una captura existente:
   ```powershell
-  .\Proyecto2\.venv\Scripts\python.exe Proyecto4\scripts\consultar_captura.py <capture_id> --profile p4-equipo
+  .\Proyecto2\.venv\Scripts\python.exe Proyecto4\scripts\consultar_captura.py <capture_id> --profile p4-lectura
   ```
 - [ ] Contenedores sanos (Session Manager, ver [`despliegue.md`](despliegue.md), "Operación").
 - [ ] ⏳ Dispositivo cargado, cámara conectada, programa probado con una captura nueva.
@@ -56,7 +56,7 @@ Sigue el orden en que la rúbrica observa el recorrido ([`rubrica.md`](rubrica.m
 Con el `capture_id` del paso 4:
 
 ```powershell
-.\Proyecto2\.venv\Scripts\python.exe Proyecto4\scripts\consultar_captura.py <capture_id> --profile p4-equipo
+.\Proyecto2\.venv\Scripts\python.exe Proyecto4\scripts\consultar_captura.py <capture_id> --profile p4-lectura
 ```
 
 Se muestra:
