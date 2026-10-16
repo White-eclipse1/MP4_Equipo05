@@ -16,7 +16,7 @@ registra hardware, cámara, runtime, modo manual, imagen completa y device_id.
 | [Fotografía de la imagen abierta](<../evidencias/EDGE-01/WhatsApp Image 2026-10-15 at 9.33.10 PM.jpeg>) | Muestra la escena del JPEG en pantalla |
 | [Montaje físico](<../evidencias/EDGE-01/WhatsApp Image 2026-10-15 at 9.53.13 PM.jpeg>) | Raspberry y teléfono conectado mediante cable USB |
 
-También se recibieron cuatro PNG de Terminal:
+La evidencia incluye cuatro PNG de Terminal:
 `Captura de pantalla 2026-10-15 205153.png`,
 `Captura de pantalla 2026-10-15 205227.png`,
 `Captura de pantalla 2026-10-15 205238.png` y
@@ -34,10 +34,9 @@ su identidad y disponibilidad en la Raspberry. La inferencia corresponde a EDGE-
 
 ## Cámara y comando de captura
 
-Omar confirmó expresamente POCO C65, sistema 2.0.208.0, IP Webcam 1.19.0.913 y
-conexión mediante USB tethering. La identificación del modelo se basa en su
-confirmación. En la fotografía del montaje se lee OPPO; se conserva como evidencia
-del montaje, pero no como comprobación independiente del modelo exacto.
+La cámara es un POCO C65 con sistema 2.0.208.0, IP Webcam 1.19.0.913 y conexión
+mediante USB tethering. La fotografía del montaje muestra la marca POCO y la
+conexión física; el modelo exacto y las versiones fueron confirmados por Omar.
 Inicio: conectar USB, habilitar anclaje USB y pulsar Iniciar servidor
 en IP Webcam. Con `CAMERA_URL` apuntando a la dirección accesible del teléfono
 terminada en `/shot.jpg`, ejecutó:
@@ -50,11 +49,23 @@ La transferencia terminó correctamente y Pillow confirmó un JPEG legible.
 El tipo de enlace se registra por confirmación de Omar; las salidas de curl
 por sí solas no distinguen USB de Wi-Fi.
 
-## Pendientes de entrega
+## Procedencia de las corridas
 
-- Revisar e integrar el PR de EDGE-01. Los archivos locales todavía no están
-  confirmados ni publicados en Git.
+Las capturas y los TXT corresponden a ejecuciones distintas del 15 de octubre
+de 2026, con zona horaria America/Mexico_City (UTC−06:00):
 
-Estado: listo para publicación y revisión de EDGE-01, con evidencias recibidas
-y modelo de cámara confirmado por Omar. No marcar DONE antes de completar
-revisión y merge.
+| Evidencia | Corrida |
+|---|---|
+| Capturas de hardware/runtime | 20:51; incluye 64 bits y sincronización del reloj |
+| `hardware-runtime.txt` | 21:36:08; repite hardware, SO, arquitectura y versiones, sin sección de sincronización |
+| `reloj.txt` | 21:37:40; comprobación independiente de NTP activo y reloj sincronizado |
+
+Los TXT no se presentan como transcripciones de las capturas. Ambas corridas
+registran el mismo hardware, SO, Python y ONNX Runtime. Los archivos originales
+se conservan sin modificar sus fechas ni secciones.
+
+## Criterios de entrega
+
+Las evidencias acreditan hardware disponible, cámara probada, runtime identificado,
+configuración documentada y acceso local al modelo correcto. El cierre del ticket
+requiere además revisión e integración del Pull Request.
