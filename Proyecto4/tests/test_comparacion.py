@@ -10,6 +10,7 @@ import csv
 import importlib.util
 import io
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -171,3 +172,57 @@ def test_detecta_png_con_dimensiones_distintas_a_crops_jsonl(tmp_path):
     assert comp.dimensiones_distintas(muestras) == [
         {"sample_id": "0.1.3:a2", "esperado": (30, 20), "png": (20, 30)}
     ]
+
+
+def test_detecta_png_con_hash_distinto_al_inventario(recortes):
+    muestras, _ = comp.muestras_val(MANIFIESTO, recortes, CLASES)
+    inventario = {m["sample_id"]: comp.sha256(m["ruta"]) for m in muestras}
+    assert comp.hashes_distintos(muestras, inventario) == []
+
+    (recortes / "cat" / "0.1.3_a4.png").write_bytes(b"otra imagen")
+    distintos = comp.hashes_distintos(muestras, inventario)
+    assert [d["sample_id"] for d in distintos] == ["0.1.3:a4"]
+
+
+def test_inventario_exige_el_sha256_de_su_resumen(tmp_path):
+    ruta = tmp_path / "recortes_0.1.3.jsonl"
+    ruta.write_text('{"crop_id": "0.1.3:a1", "sha256": "ab"}\n', encoding="utf-8")
+    resumen = {"inventario": {"archivo": ruta.name, "sha256": comp.sha256(ruta)}}
+    ruta.with_suffix(".json").write_text(json.dumps(resumen), encoding="utf-8")
+    assert comp.cargar_inventario(ruta) == {"0.1.3:a1": "ab"}
+
+    ruta.write_text('{"crop_id": "0.1.3:a1", "sha256": "cd"}\n', encoding="utf-8")
+    with pytest.raises(comp.ComparacionError, match="SHA-256"):
+        comp.cargar_inventario(ruta)
+
+
+def test_huella_de_validacion_del_p3():
+    filas = [
+        {"true_class": "cat", "original_prediction": "cat", "prob_original_cat": "0.9"},
+        {"true_class": "dog", "original_prediction": "cat", "prob_original_dog": "0.4"},
+    ]
+    perdida = (-math.log(0.9) - math.log(0.4)) / 2
+    seleccion = {"run_id": "r", "val_accuracy": 0.5, "val_loss": perdida + 5e-6}
+    assert comp.huella_p3(filas, seleccion)["ok"]
+
+    # Otra imagen en val mueve la perdida aunque el accuracy no cambie.
+    assert not comp.huella_p3(filas, {**seleccion, "val_loss": perdida + 1e-3})["ok"]
+    assert not comp.huella_p3(filas, {**seleccion, "val_accuracy": 1.0})["ok"]
+
+
+def test_inventario_detecta_etag_que_no_es_el_md5(recortes):
+    sys.path.insert(0, str(SCRIPT.parent))
+    import inventario_recortes as inv
+
+    objetos = {}
+    for r in comp.leer_jsonl(recortes / "crops.jsonl"):
+        _, md5, _ = inv.hashes(recortes / r["crop_path"])
+        objetos[r["crop_path"]] = {"version_id": "v1", "etag": md5}
+    filas, problemas, etags = inv.inventario(recortes, MANIFIESTO, objetos)
+    assert (len(filas), problemas, etags) == (6, [], 6)
+    assert {f["split"] for f in filas} == {"train", "val", "test"}
+
+    objetos["cat/0.1.3_a4.png"]["etag"] = "0" * 32
+    del objetos["dog/0.1.3_a2.png"]
+    _, problemas, _ = inv.inventario(recortes, MANIFIESTO, objetos)
+    assert len(problemas) == 2

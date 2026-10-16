@@ -28,10 +28,13 @@ El mismo `model_int8.onnx` se corre dos veces:
   no depende del CPU y sirve para contrastar la medicion del dispositivo.
 
 Antes de correr, exige el SHA-256 del manifiesto, de `crops.jsonl` y de los tres
-modelos (los de `modelo/conversion.yaml` y `modelo/registros/registro_conversion.json`)
+modelos (los de `modelo/conversion.yaml` y `modelo/registros/registro_conversion.json`),
+el de cada recorte de `val` (inventario congelado por `validacion/inventario_recortes.py`)
 y comprueba contra el manifiesto que la calibracion del INT8 uso solo train. Despues,
 vuelve a leer el CSV escrito y comprueba que sus IDs son exactamente los de `val`, sin
-duplicados ni faltantes. Sale con codigo 1 si algo no se cumple.
+duplicados ni faltantes, y que el original reproduce el accuracy y el val_loss que el
+P3 registro en `selection.json` (huella de que son las mismas imagenes). Sale con
+codigo 1 si algo no se cumple.
 
 Salidas en `validacion/resultados/`: `comparacion_val.csv` (por muestra) y
 `comparacion_val.json` (procedencia, comprobaciones y resumen).
@@ -44,6 +47,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 import platform
 import sys
 from collections import Counter
@@ -59,6 +63,7 @@ RAIZ = AQUI.parent  # Proyecto4/
 MODELO = RAIZ / "modelo"
 P3 = RAIZ.parent / "Proyecto3"
 RESULTADOS = AQUI / "resultados"
+REGISTROS_VAL = AQUI / "registros"
 
 SPLIT = "val"
 MODELOS = ("original", "fp32", "int8", "int8_referencia")
@@ -111,6 +116,10 @@ def configuracion() -> dict[str, Any]:
             },
         },
         "calibracion_ids": MODELO / "registros" / "calibracion_ids.jsonl",
+        # Inventario congelado con el SHA-256 de cada recorte (validacion/inventario_recortes.py).
+        "inventario": REGISTROS_VAL / f"recortes_{Path(cal['recortes']).name}.jsonl",
+        # Huella de validacion del modelo seleccionado, registrada por el P3.
+        "seleccion_p3": {k: seleccion[k] for k in ("run_id", "val_accuracy", "val_loss")},
     }
 
 
@@ -174,6 +183,57 @@ def dimensiones_distintas(muestras: list[dict[str, Any]]) -> list[dict[str, Any]
                     {"sample_id": m["sample_id"], "esperado": m["tamano"], "png": imagen.size}
                 )
     return distintas
+
+
+def cargar_inventario(ruta: Path) -> dict[str, str]:
+    """`crop_id -> sha256` del inventario, tras comprobar el SHA-256 que registra su resumen."""
+    resumen = ruta.with_suffix(".json")
+    if not ruta.is_file() or not resumen.is_file():
+        raise ComparacionError(f"No existe el inventario de recortes {ruta} (y su .json)")
+    esperado = json.loads(resumen.read_text(encoding="utf-8"))["inventario"]["sha256"]
+    exigir_sha(ruta, esperado, "inventario de recortes")
+    return {f["crop_id"]: f["sha256"] for f in leer_jsonl(ruta)}
+
+
+def hashes_distintos(
+    muestras: list[dict[str, Any]], inventario: dict[str, str]
+) -> list[dict[str, str]]:
+    """Recortes cuyo PNG no tiene el SHA-256 del inventario congelado."""
+    distintos = []
+    for m in muestras:
+        esperado = inventario.get(m["sample_id"])
+        obtenido = sha256(m["ruta"])
+        if obtenido != esperado:
+            distintos.append({"sample_id": m["sample_id"], "esperado": esperado, "png": obtenido})
+    return distintos
+
+
+def huella_p3(
+    filas: list[dict[str, Any]], seleccion: dict[str, Any], tolerancia: float = 1e-5
+) -> dict[str, Any]:
+    """Accuracy y val_loss del original sobre estas imagenes contra los registrados por el P3.
+
+    El P3 guardo en `selection.json` el accuracy y la perdida de validacion del modelo
+    seleccionado. Recalcularlos con las probabilidades del original sobre estas imagenes
+    comprueba, por otro camino que el hash, que son las mismas que evaluo el P3: la
+    perdida es continua y se moveria con cualquier imagen distinta. La tolerancia cubre
+    float32 por muestra contra por lotes.
+    """
+    n = len(filas)
+    accuracy = sum(f["original_prediction"] == f["true_class"] for f in filas) / n
+    perdida = sum(-math.log(float(f[f"prob_original_{f['true_class']}"])) for f in filas) / n
+    return {
+        "run_id": seleccion["run_id"],
+        "val_accuracy": {"recalculada": accuracy, "p3": seleccion["val_accuracy"]},
+        "val_loss": {
+            "recalculada": perdida,
+            "p3": seleccion["val_loss"],
+            "diferencia": abs(perdida - seleccion["val_loss"]),
+            "tolerancia": tolerancia,
+        },
+        "ok": accuracy == seleccion["val_accuracy"]
+        and abs(perdida - seleccion["val_loss"]) <= tolerancia,
+    }
 
 
 def comprobar_calibracion(
@@ -426,6 +486,13 @@ def main() -> None:
     distintas = dimensiones_distintas(muestras)
     if distintas:
         raise SystemExit(f"FALLA: recortes con dimensiones distintas a crops.jsonl: {distintas}")
+    try:
+        inventario = cargar_inventario(cfg["inventario"])
+    except ComparacionError as error:
+        raise SystemExit(f"FALLA: {error}") from error
+    distintos = hashes_distintos(muestras, inventario)
+    if distintos:
+        raise SystemExit(f"FALLA: recortes con SHA-256 distinto al inventario: {distintos}")
 
     filas = comparar(muestras, predictores, clases)
     datos = csv_bytes(filas, clases)
@@ -447,6 +514,11 @@ def main() -> None:
             "crops_jsonl_sha256": cfg["crops_jsonl_sha256"],
             "filas_val": len(muestras) + len(faltantes),
             "recortes_con_dimensiones_de_crops_jsonl": len(muestras),
+            "recortes_con_sha256_del_inventario": len(muestras),
+            "inventario": {
+                "archivo": cfg["inventario"].name,
+                "sha256": sha256(cfg["inventario"]),
+            },
         },
         "modelos": {
             n: {
@@ -468,6 +540,7 @@ def main() -> None:
         "calibracion": calibracion,
         "verificacion": verificacion,
         "resumen": resumen(filas, clases),
+        "huella_p3": huella_p3(filas, cfg["seleccion_p3"]),
         "csv": {"archivo": ruta_csv.name, "sha256": hashlib.sha256(datos).hexdigest()},
         "entorno": {
             "python": platform.python_version(),
@@ -486,7 +559,15 @@ def main() -> None:
     print(f"acuerdo int8/original: {r['acuerdo_int8_vs_original']}/{r['muestras']}")
     print(f"acuerdo int8/int8_referencia: {r['acuerdo_int8_vs_int8_referencia']}/{r['muestras']}")
     print(f"calibracion solo train: {calibracion['solo_train']}; CSV ok: {verificacion['ok']}")
-    if not (verificacion["ok"] and calibracion["solo_train"] and r["clases_presentes"]):
+    huella = evidencia["huella_p3"]
+    print(
+        f"huella P3: val_acc {huella['val_accuracy']['recalculada']:.6f}, val_loss "
+        f"{huella['val_loss']['recalculada']:.7f} (P3 {huella['val_loss']['p3']:.7f}); "
+        f"ok: {huella['ok']}"
+    )
+    if not (
+        verificacion["ok"] and calibracion["solo_train"] and r["clases_presentes"] and huella["ok"]
+    ):
         raise SystemExit(1)
 
 
