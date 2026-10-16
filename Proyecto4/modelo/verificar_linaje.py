@@ -546,7 +546,7 @@ def main() -> None:
         "comprobaciones": [asdict(x) for x in c],
         "entorno": {"python": platform.python_version(), "sistema": platform.system()},
     }
-    destino = RAIZ / args.salida
+    destino = (RAIZ / args.salida).resolve()
     destino.write_bytes(
         (json.dumps(evidencia, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     )
@@ -555,7 +555,7 @@ def main() -> None:
         print(f"[{x.estado:9}] {x.id}: {x.criterio}")
         if x.estado != OK:
             print(f"            {x.detalle}")
-    print(f"\n{resumen} -> {destino.relative_to(RAIZ).as_posix()}")
+    print(f"\n{resumen} -> {destino.as_posix()}")
     if resumen[FALLA]:
         raise SystemExit(1)
 
