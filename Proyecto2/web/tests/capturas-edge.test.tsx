@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CapturaEdge, CapturasRespuesta } from '../src/lib/api';
@@ -37,6 +37,7 @@ const respuesta = (items: CapturaEdge[], errores: CapturasRespuesta['errores'] =
   jsonResponse({ items, total: items.length, errores });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -191,6 +192,46 @@ describe('Capturas Edge', () => {
     const alerta = await screen.findByRole('alert');
     expect(alerta).toHaveTextContent('No se pudieron cargar las capturas.');
     expect(alerta).toHaveTextContent('Error interno');
+  });
+
+  it('muestra Cargando mientras llega la primera respuesta', async () => {
+    let responder!: (r: Response) => void;
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise<Response>((r) => (responder = r))));
+    render(<CapturasEdge />);
+    expect(screen.getByText('Cargando capturas…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actualizando…' })).toBeDisabled();
+
+    responder(respuesta([captura({ capture_id: 'edge01-a' })]));
+
+    expect(await screen.findByLabelText('Captura edge01-a')).toBeInTheDocument();
+    expect(screen.queryByText('Cargando capturas…')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actualizar' })).toBeEnabled();
+  });
+
+  it('cada 30 s vuelve a pedir la lista; al desmarcarlo deja de hacerlo', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(respuesta([captura({ capture_id: 'edge01-a' })]))
+      .mockImplementation(() =>
+        Promise.resolve(
+          respuesta([captura({ capture_id: 'edge01-nueva' }), captura({ capture_id: 'edge01-a' })]),
+        ),
+      );
+    vi.stubGlobal('fetch', fetch);
+    render(<CapturasEdge />);
+    await screen.findByLabelText('Captura edge01-a');
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    await act(() => vi.advanceTimersByTimeAsync(30_000));
+
+    const tarjetas = await screen.findAllByRole('article');
+    expect(tarjetas[0]).toHaveAttribute('aria-label', 'Captura edge01-nueva');
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'cada 30 s' }));
+    await act(() => vi.advanceTimersByTimeAsync(90_000));
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('enlaces de exportación CSV y JSON', async () => {
