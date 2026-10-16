@@ -18,10 +18,12 @@ aws ssm get-parameter --name /p4/portal-evaluador --with-decryption --query Para
 
 ## Consulta de solo lectura en AWS (demostración)
 
+**Perfil:** las consultas de esta sección se hacen con `p4-lectura`, el usuario de solo lectura (ver abajo): quien repita la demostración no puede escribir ni borrar por error. `p4-equipo` (administración) se usa solo para leer secretos de Parameter Store y operar la EC2, que `p4-lectura` no puede hacer a propósito.
+
 [`scripts/consultar_captura.py`](../scripts/consultar_captura.py) sigue una captura elegida por el evaluador. Solo usa `sts get-caller-identity`, `get-object` y `list-object-versions`; no escribe ni borra.
 
 ```bash
-python Proyecto4/scripts/consultar_captura.py <capture_id> --profile p4-equipo
+python Proyecto4/scripts/consultar_captura.py <capture_id> --profile p4-lectura
 ```
 
 Muestra:
@@ -37,11 +39,11 @@ Si todo coincide termina en `Resultado: OK`. Se probó el 15 de octubre contra e
 Comandos equivalentes con la CLI, si se prefiere no usar el script:
 
 ```bash
-aws s3api head-object --bucket p4-capturas-474665692638 --key edge-capturas/eventos/<id>.json --profile p4-equipo --region us-east-1
+aws s3api head-object --bucket p4-capturas-474665692638 --key edge-capturas/eventos/<id>.json --profile p4-lectura --region us-east-1
 ```
 
 ```bash
-aws s3api list-object-versions --bucket p4-capturas-474665692638 --prefix edge-capturas/eventos/<id>.json --profile p4-equipo --region us-east-1
+aws s3api list-object-versions --bucket p4-capturas-474665692638 --prefix edge-capturas/eventos/<id>.json --profile p4-lectura --region us-east-1
 ```
 
 ## Usuario de solo lectura para la demostración (`p4-lectura`)

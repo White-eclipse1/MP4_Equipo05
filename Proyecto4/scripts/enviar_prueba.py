@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Registro local: {carpeta}")
     print(
         "Siguiente: abre Capturas Edge en el portal y corre "
-        f"`python Proyecto4/scripts/consultar_captura.py {capture_id} --profile p4-equipo`"
+        f"`python Proyecto4/scripts/consultar_captura.py {capture_id} --profile p4-lectura`"
     )
     return 0 if todo_ok else 1
 
