@@ -103,6 +103,29 @@ secuencia completamente correlacionada falta el estado de red de la sesión
 utilizada y acceso externo exitoso antes de la captura posterior a reconectar.
 Los archivos actuales se conservan como evidencia de los intentos originales.
 
+### Corridas adicionales recibidas
+
+`corrida-final/offline.jsonl` contiene otras dos sesiones completas. Sus seis
+JPEG se verificaron contra los JSON y hashes del log:
+
+| Sesión | Carga | Capturas declaradas offline | Captura posterior |
+|---|---|---|---|
+| `cd3cfa51a5fe4be2ba79cce6a61c7016`, PID 5663 | 01:16:42 | 01:20:02 cat; 01:20:14 dog | 01:23:55 dog |
+| `18d0efd255004ce0872921bf0c4fff04`, PID 5829 | 01:27:33 | 01:27:59 cat; 01:28:11 dog | 01:29:16 cat, esperada dog |
+
+Para la primera sesión, `red-offline-antes.txt` (01:19:49) y
+`red-offline-despues.txt` (01:20:39) rodean las dos capturas y muestran Ethernet
+desconectado, Wi-Fi inactivo y fallo de DNS. La primera conexión exitosa registrada
+es posterior a la terminación de esa sesión.
+
+Para la segunda sesión, `red-reconectada.txt` contiene HTTP/2 200 a las 01:28:45,
+antes de la tercera captura de las 01:29:16, con el mismo PID y session_id. No se
+recibió registro de red offline específico de esta segunda sesión. La fase offline
+está declarada por el operador; los TXT de las 01:19 y 01:20 no se atribuyen a ella.
+No se mezclan las dos sesiones para afirmar una única corrida totalmente
+correlacionada. Se conserva el último resultado incorrecto y el empate de logits
+cat/dog sin modificarlo.
+
 Prueba local desde `Proyecto4`:
 
 ```bash
