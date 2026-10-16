@@ -17,14 +17,24 @@ Entorno: Python 3.13.15, torch 2.14.0+cpu, onnxruntime 1.31.0 y numpy 2.5.3 (id�
 
 Son números de la laptop. Las métricas por clase y el análisis de errores corresponden a VAL-04 (#14), y la medición que cuenta para la rúbrica se hace en el dispositivo (VAL-07, VAL-05).
 
-### Hallazgo: en x86 sin VNNI, el INT8 depende del CPU
+### Hallazgo: el INT8 da resultados distintos según cómo lo ejecuta onnxruntime
 
-El mismo `model_int8.onnx` da 288 aciertos con las optimizaciones por defecto de onnxruntime y 290 con la aritmética de referencia del grafo. La variante usa el formato U8S8 (activaciones UINT8 y pesos INT8). Cuando onnxruntime funde los pares QDQ en kernels enteros sobre una CPU x86 sin VNNI, las sumas intermedias pueden **saturar**. Los errores que solo aparecen por eso son de muestras que el original clasifica con total seguridad: `0.1.3:a448` es `cat` con probabilidad 0.9996 y el INT8 la convierte en `person` con 0.506. En una CPU con VNNI, o en ARM, el kernel entero no satura y el resultado debería coincidir con la referencia: el registro de conversión, generado en otra máquina, reporta 0.9932.
+**Lo medido.** Con el mismo `model_int8.onnx`, el mismo entorno y las mismas imágenes:
+- con las optimizaciones por defecto de onnxruntime, que funden los pares QDQ en kernels enteros, hay **288** aciertos;
+- con esas optimizaciones apagadas (`ORT_DISABLE_ALL`), hay **290**.
 
-Por eso el CSV trae dos columnas del INT8, y la evidencia registra el nombre del CPU:
+Las diferencias están en muestras que el original clasifica con mucha seguridad. Por ejemplo, `0.1.3:a448` es `cat` con probabilidad 0.9996 en el original, y el INT8 fusionado la convierte en `person` con 0.506. El registro de conversión, generado en otra máquina cuya CPU no conocemos, reporta 290/292.
+
+**La hipótesis, sin confirmar.** La variante usa el formato U8S8 (activaciones UINT8 y pesos INT8), y la laptop de VAL es una CPU x86 sin VNNI (AMD Ryzen 5 5625U). onnxruntime documenta que, en esa combinación, las sumas intermedias de los kernels enteros pueden **saturar**. Eso explicaría la diferencia. Pero esta prueba no demuestra que sea la única causa: el kernel fusionado también redondea y recuantiza los resultados intermedios de otra forma que la ejecución QDQ paso a paso.
+
+**Cómo confirmarla.** Correr este mismo CSV en el dispositivo (ARM, VAL-07) o en una CPU x86 con VNNI:
+- si ahí `int8` coincide con `int8_referencia`, la hipótesis gana fuerza;
+- si no coincide, hay otra causa que buscar.
+
+Mientras tanto, el CSV trae dos columnas del INT8 y la evidencia registra el nombre del CPU:
 
 - **`int8`** (`optimized_prediction`): lo que ejecuta el runtime en la máquina que corre la comparación.
-- **`int8_referencia`**: el mismo archivo con `ORT_DISABLE_ALL`. Cada `QuantizeLinear` y `DequantizeLinear` se ejecuta tal cual y la convolución se hace en float. No depende del CPU y es la cifra contra la que se contrasta el dispositivo.
+- **`int8_referencia`**: el mismo archivo con `ORT_DISABLE_ALL`. Cada `QuantizeLinear` y `DequantizeLinear` se ejecuta tal cual y la convolución se hace en float, sin kernels enteros fusionados. Es la cifra contra la que se contrasta el dispositivo.
 
 El comentario de `modelo/conversion.yaml` afirmaba que las activaciones UINT8 "se comportan igual en x86 y en ARM", y ya se corrigió. Es solo un comentario: no cambia la técnica, la configuración que lee `convertir.py` ni el registro de conversión, y VAL-01 sigue pasando.
 
@@ -32,11 +42,11 @@ El comentario de `modelo/conversion.yaml` afirmaba que las activaciones UINT8 "s
 
 | Cifra | De dónde sale | Qué mide |
 |---|---|---|
-| 99.32 % (290/292) | `verificacion_rapida` de `modelo/registros/registro_conversion.json` | El runtime por defecto en la máquina donde se convirtió. Coincide con la referencia: es de esperar en una CPU que no satura |
-| 99.32 % (290/292) | columna `int8_referencia` de este CSV | La aritmética del grafo QDQ, independiente del CPU |
-| 98.63 % (288/292) | columna `int8` (`optimized_prediction`) de este CSV | El runtime por defecto en la laptop de VAL (x86 sin VNNI, con saturación) |
+| 99.32 % (290/292) | `verificacion_rapida` de `modelo/registros/registro_conversion.json` | El runtime por defecto en la máquina donde se convirtió (CPU no registrada). Coincide con la referencia |
+| 99.32 % (290/292) | columna `int8_referencia` de este CSV | La aritmética del grafo QDQ paso a paso, sin kernels enteros fusionados |
+| 98.63 % (288/292) | columna `int8` (`optimized_prediction`) de este CSV | El runtime por defecto en la laptop de VAL (x86 sin VNNI) |
 
-**Ninguna de las tres es la cifra de la rúbrica.** La que cuenta es la del runtime **en el dispositivo**. Cuando esté disponible, VAL-07 vuelve a generar este CSV en el edge, de modo que la columna `optimized_prediction` sea la del dispositivo. En ARM no se espera saturación, así que `int8` debería coincidir con `int8_referencia`; si no coincide, la diferencia también se explica con estas columnas. Mientras tanto, el CSV de la laptop sirve para VAL-03 y VAL-04, siempre citando la CPU.
+**Ninguna de las tres es la cifra de la rúbrica.** La que cuenta es la del runtime **en el dispositivo**. Cuando esté disponible, VAL-07 vuelve a generar este CSV en el edge, de modo que la columna `optimized_prediction` sea la del dispositivo. Esa corrida también pone a prueba la hipótesis de la saturación: si en ARM `int8` coincide con `int8_referencia`, la apoya. Mientras tanto, el CSV de la laptop sirve para VAL-03 y VAL-04, siempre citando la CPU.
 
 ## Qué se compara
 

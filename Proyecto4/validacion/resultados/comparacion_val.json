@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "tarea": "VAL-02 (#2)",
-  "generado_en": "2026-10-16T01:59:54+00:00",
+  "generado_en": "2026-10-16T03:32:46+00:00",
   "comando": "modelo/.venv/Scripts/python validacion/comparar_modelos.py",
   "split": "val",
   "clases": [
@@ -39,8 +39,8 @@
     }
   },
   "columnas_int8": {
-    "int8": "onnxruntime con optimizaciones por defecto (kernels enteros); depende del CPU en x86: U8S8 puede saturar sin VNNI",
-    "int8_referencia": "mismo model_int8.onnx con ORT_DISABLE_ALL: QDQ ejecutado tal cual, independiente del CPU",
+    "int8": "onnxruntime con optimizaciones por defecto (kernels enteros fusionados); puede cambiar con el CPU. Hipotesis sin confirmar: saturacion U8S8 en x86 sin VNNI",
+    "int8_referencia": "mismo model_int8.onnx con ORT_DISABLE_ALL: QDQ ejecutado tal cual, sin kernels enteros fusionados",
     "optimized_prediction": "igual a int8_prediction"
   },
   "calibracion": {
