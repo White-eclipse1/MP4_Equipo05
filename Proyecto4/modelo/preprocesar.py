@@ -1,4 +1,4 @@
-﻿"""Preprocesamiento del modelo para el dispositivo edge: numpy + Pillow, sin PyTorch.
+"""Preprocesamiento del modelo para el dispositivo edge: numpy + Pillow, sin PyTorch.
 
 Reproduce `build_eval_transform` del Proyecto 3 (`Proyecto3/src/p3/data/transforms.py`):
 RGB, estirado a `tamano x tamano` sin recortar bordes (bilineal con antialias),
