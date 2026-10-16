@@ -55,11 +55,15 @@ Detalle en la [ficha del modelo optimizado](docs/modelo-optimizado.md) y en el [
 
 | Dato | Valor |
 |---|---|
-| Dispositivo y cámara | ⏳ Omar (EDGE-01) |
-| Sistema operativo y arquitectura | ⏳ Omar (EDGE-01) |
-| Runtime | ⏳ onnxruntime en el dispositivo; versión por confirmar (EDGE-01) |
-| Modo de captura | ⏳ botón o intervalo, foto completa o recorte fijo (EDGE-01) |
-| `device_id` | ⏳ (EDGE-01) |
+| Dispositivo | Raspberry Pi 4 Model B Rev 1.5 |
+| Cámara | Teléfono POCO C65 con la app IP Webcam 1.19.0.913, conectado a la Raspberry por cable USB |
+| Sistema operativo y arquitectura | Debian GNU/Linux 13.7 (Trixie), ARM64 (aarch64), 64 bits |
+| Runtime | Python 3.13.5 y onnxruntime 1.31.0 (`CPUExecutionProvider`) |
+| Modo de captura | Manual: un disparo por ejecución del comando; imagen completa (`region: null`), JPEG de 1920×1080 |
+| `device_id` | `edge01` |
+| Modelo en el dispositivo | `/home/pi/edge01/modelo/model_int8.onnx`, SHA-256 `ba89ee43…2a12` verificado en la Raspberry |
+
+Fuente: EDGE-01 (#5, PR #34): [guía del dispositivo](docs/edge-guia.md), [entrega de EDGE-01](docs/edge01-entrega.md) y [`evidencias/EDGE-01/`](evidencias/EDGE-01/) (hardware y runtime, foto nueva de la cámara, hash del modelo y montaje físico).
 
 Configuración del programa del dispositivo, sin secretos: [`contrato/dispositivo.env.example`](contrato/dispositivo.env.example).
 
