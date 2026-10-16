@@ -99,7 +99,8 @@ def latencia(filas: list[dict[str, str]], modelo: str) -> dict[str, Any]:
             "p95": percentil(valores, 95),
             "min": min(valores),
             "max": max(valores),
-            "media": sum(valores) / len(valores),
+            # fsum es exacta y da lo mismo en cualquier Python; sum() de floats cambio en 3.12.
+            "media": math.fsum(valores) / len(valores),
         }
     return resultado
 
