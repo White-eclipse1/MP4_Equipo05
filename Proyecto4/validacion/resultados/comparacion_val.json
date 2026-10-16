@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "tarea": "VAL-02 (#2)",
-  "generado_en": "2026-10-16T00:04:14+00:00",
+  "generado_en": "2026-10-16T01:59:54+00:00",
   "comando": "modelo/.venv/Scripts/python validacion/comparar_modelos.py",
   "split": "val",
   "clases": [
@@ -14,7 +14,12 @@
     "sha256": "45600f297d13f51685e051e0cbc4962beb1f7c6a4e03247cbf61a345e6fa4305",
     "crops_jsonl_sha256": "d3d61f35a3efb60e665ac16c95a18f1602df44f3df7c22b86e1c949fadbe1bed",
     "filas_val": 292,
-    "recortes_con_dimensiones_de_crops_jsonl": 292
+    "recortes_con_dimensiones_de_crops_jsonl": 292,
+    "recortes_con_sha256_del_inventario": 292,
+    "inventario": {
+      "archivo": "recortes_0.1.3.jsonl",
+      "sha256": "c223e226694208c20cba37e4ea68f6c8ab0a1cade2ce317a91c9b2d460296612"
+    }
   },
   "modelos": {
     "original": {
@@ -80,6 +85,20 @@
     "acuerdo_int8_vs_int8_referencia": 288,
     "nota": "Metricas formales por clase y analisis de errores: VAL-04 (#14).",
     "clases_presentes": true
+  },
+  "huella_p3": {
+    "run_id": "9f9b62c202f0446a8a4b411a10321eff",
+    "val_accuracy": {
+      "recalculada": 0.9965753424657534,
+      "p3": 0.9965753424657534
+    },
+    "val_loss": {
+      "recalculada": 0.024252544499675406,
+      "p3": 0.024253537750815693,
+      "diferencia": 9.93251140286866e-07,
+      "tolerancia": 1e-05
+    },
+    "ok": true
   },
   "csv": {
     "archivo": "comparacion_val.csv",
