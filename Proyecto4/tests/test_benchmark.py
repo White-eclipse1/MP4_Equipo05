@@ -193,3 +193,20 @@ def test_detecta_preprocesamiento_distinto_al_del_repositorio():
     assert igual["ok"], fallidas(igual)
     assert "preprocesamiento" in {c["id"] for c in igual["comprobaciones"]}
     assert fallidas(ver.verificar(tiempos, datos, REGISTRO, "b" * 64)) == {"preprocesamiento"}
+
+
+@pytest.mark.skipif(not (ver.EVIDENCIA / "benchmark.json").is_file(), reason="sin evidencia")
+def test_la_evidencia_de_la_raspberry_se_verifica():
+    """La corrida fisica versionada en evidencias/VAL-05/ (rubrica 3.2)."""
+    datos = json.loads((ver.EVIDENCIA / "benchmark.json").read_text("utf-8"))
+    informe = ver.verificar(
+        (ver.EVIDENCIA / "tiempos.csv").read_bytes(),
+        datos,
+        REGISTRO,
+        hashlib.sha256(ver.PREPROCESAR.read_bytes()).hexdigest(),
+    )
+    assert informe["ok"], fallidas(informe)
+    assert datos["hardware"]["modelo_dispositivo"].startswith("Raspberry Pi 4")
+    for modelo in ("int8", "fp32"):
+        resumen = datos["modelos"][modelo]["resumen"]
+        assert resumen["calentamientos"] >= 10 and resumen["mediciones_validas"] >= 100

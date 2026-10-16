@@ -123,6 +123,46 @@ python validacion/verificar_benchmark.py
 
 Un modelo que no cargó pasa la verificación solo si su error quedó registrado.
 
+## Corrida en la Raspberry (16 oct de 2026)
+
+Omar la ejecutó con `python -u app/benchmark.py`, a las 01:05–01:07 (UTC−06:00). El JSON registra el comando sin `-u`, porque `sys.argv` no guarda las opciones del intérprete; `-u` solo quita el búfer de la salida. La evidencia está en [`evidencias/VAL-05/`](../evidencias/VAL-05/):
+- [`tiempos.csv`](../evidencias/VAL-05/tiempos.csv): 420 filas en milisegundos;
+- [`benchmark.json`](../evidencias/VAL-05/benchmark.json);
+- [la captura de la Terminal](../evidencias/VAL-05/Captura%20de%20pantalla%202026-10-16%20010957.png).
+
+Llegó en `VAL-05.zip` (SHA-256 `d5c582ea…943a`) y se copió sin editar. `python validacion/verificar_benchmark.py` → **VERIFICADO**. El CI vuelve a verificarla en `tests/test_benchmark.py`.
+
+| | Registrado |
+|---|---|
+| Dispositivo | Raspberry Pi 4 Model B Rev 1.5 (revisión `a03115`, 1 GB): 4 núcleos Cortex-A72 (`CPU part 0xd08`), 927 380 kB de RAM visibles |
+| Sistema | Debian GNU/Linux 13 (trixie), kernel `6.18.50+rpt-rpi-v8`, aarch64 |
+| Runtime | Python 3.13.5, onnxruntime 1.31.0 (`CPUExecutionProvider`, hilos automáticos), numpy 2.5.4, Pillow 12.3.0 |
+| Código | `benchmark.py` `ed31ef43…` y `preprocesar.py` `8fa139aa…`, los dos idénticos a los del repositorio |
+| Modelos | INT8 `ba89ee43…` (11 295 280 bytes) y FP32 `6b640343…` (44 702 717 bytes), los de la conversión verificada en VAL-01 |
+| Imágenes | Las 3 de EDGE-03 (`cat`, `dog`, `person`), JPEG de 1920 × 1080 |
+| CPU | Gobernador `ondemand`, 1.8 GHz (máximo) en los 4 núcleos al inicio y al final |
+| Temperatura | 49.2 °C al inicio y 75.0 °C al final; máximo de 78.4 °C en una repetición del FP32 |
+| *Throttling* | `vcgencmd get_throttled` = `0x0` al inicio y al final: sin limitación de frecuencia ni de voltaje |
+| Carga del sistema | `loadavg` de 0.13 antes de empezar: dispositivo en reposo |
+
+| Modelo | Calentamientos | Mediciones válidas | Carga de la sesión | Memoria pico del proceso | Clase por imagen |
+|---|---:|---:|---:|---:|---|
+| INT8 | 10 | 200 / 200 | 152.0 ms | 114.4 MB | cat → cat, dog → dog, person → person |
+| FP32 | 10 | 200 / 200 | 311.6 ms | 184.2 MB | cat → cat, dog → dog, person → person |
+
+El original (FP32) **sí corre** en este dispositivo y se midió en las mismas condiciones, así que no hubo ninguna incompatibilidad que documentar.
+
+**Estabilidad y efecto térmico.** El FP32 corrió segundo y con el dispositivo más caliente. Aun así, la mediana del tiempo total es la misma en la primera y en la segunda mitad de cada modelo: 113.4 contra 113.6 ms en el INT8, y 190.1 contra 190.1 ms en el FP32. Las 200 mediciones de cada modelo caben en un rango de unos 6 ms y no hubo *throttling*. El calor no sesgó la comparación. Solo los primeros calentamientos son más lentos: 129 ms en el INT8, y 210 y 281 ms en el FP32. Por eso se excluyen.
+
+**Vista rápida** (medianas, ms; los p50 y p95 formales, recalculables, son de VAL-06):
+
+| Modelo | Total | Preprocesamiento | Inferencia |
+|---|---:|---:|---:|
+| INT8 | 113.5 | 42.3 | 71.0 |
+| FP32 | 190.1 | 42.6 | 147.3 |
+
+El preprocesamiento es el mismo código y cuesta lo mismo en los dos. La diferencia está en la inferencia.
+
 ## Probado antes de llevarlo al dispositivo
 
 - `tests/test_benchmark.py` (CI): calentamientos marcados antes de las mediciones; recorrido fijo de imágenes; repetición fallida registrada como inválida; mínimos de 10 y 100; identidad de los modelos igual al registro de conversión; verificación de conteos, identidad, CSV, dispositivo y preprocesamiento; original incompatible con su error registrado.
