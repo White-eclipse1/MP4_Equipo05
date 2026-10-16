@@ -74,7 +74,12 @@ def test_solo_val_en_el_orden_del_manifiesto(recortes):
 def test_csv_con_los_mismos_ids_y_etiquetas_que_val(recortes):
     muestras, faltantes = comp.muestras_val(MANIFIESTO, recortes, CLASES)
     correcto = predictor_correcto(muestras)
-    predictores = {"original": correcto, "fp32": correcto, "int8": predictor_fijo("person")}
+    predictores = {
+        "original": correcto,
+        "fp32": correcto,
+        "int8": predictor_fijo("person"),
+        "int8_referencia": correcto,
+    }
     filas = comp.comparar(muestras, predictores, CLASES)
     datos = comp.csv_bytes(filas, CLASES)
 
@@ -91,15 +96,17 @@ def test_csv_con_los_mismos_ids_y_etiquetas_que_val(recortes):
     assert float(leidas[0]["prob_int8_person"]) == 0.9
 
     r = comp.resumen(filas, CLASES)
-    assert r["aciertos"] == {"original": 3, "fp32": 3, "int8": 1}
+    assert r["aciertos"] == {"original": 3, "fp32": 3, "int8": 1, "int8_referencia": 3}
     assert r["acuerdo_int8_vs_original"] == 1
+    assert r["acuerdo_int8_vs_int8_referencia"] == 1
+    assert [f["int8_referencia_prediction"] for f in leidas] == ["dog", "cat", "person"]
     assert r["clases_presentes"]
 
 
 def test_detecta_id_duplicado(recortes):
     muestras, faltantes = comp.muestras_val(MANIFIESTO, recortes, CLASES)
     p = predictor_fijo("cat")
-    filas = comp.comparar(muestras, {"original": p, "fp32": p, "int8": p}, CLASES)
+    filas = comp.comparar(muestras, dict.fromkeys(comp.MODELOS, p), CLASES)
     datos = comp.csv_bytes([*filas, filas[0]], CLASES)
     verificacion = comp.verificar_csv(datos, muestras, faltantes)
     assert verificacion["duplicados"] == ["0.1.3:a2"]
@@ -111,9 +118,7 @@ def test_muestra_sin_imagen_queda_como_faltante_y_falla(recortes):
     muestras, faltantes = comp.muestras_val(MANIFIESTO, recortes, CLASES)
     assert faltantes == [{"sample_id": "0.1.3:a4", "motivo": "no existe cat/0.1.3_a4.png"}]
     p = predictor_fijo("cat")
-    datos = comp.csv_bytes(
-        comp.comparar(muestras, {"original": p, "fp32": p, "int8": p}, CLASES), CLASES
-    )
+    datos = comp.csv_bytes(comp.comparar(muestras, dict.fromkeys(comp.MODELOS, p), CLASES), CLASES)
     assert not comp.verificar_csv(datos, muestras, faltantes)["ok"]
 
 

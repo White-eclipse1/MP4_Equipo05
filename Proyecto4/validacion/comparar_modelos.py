@@ -18,6 +18,15 @@ Asi la diferencia original -> int8 es la que vera el usuario; la columna fp32 se
 que aporta la cuantizacion (fp32 -> int8) de lo que aporta el cambio de runtime y de
 preprocesamiento (original -> fp32).
 
+El mismo `model_int8.onnx` se corre dos veces:
+
+- `int8`: con las optimizaciones por defecto de onnxruntime, que funden los pares QDQ en
+  kernels enteros. Es lo que ejecuta el runtime en esta maquina, pero en x86 sin VNNI el
+  formato U8S8 puede saturar y el resultado depende del CPU (se registra su nombre).
+- `int8_referencia`: con las optimizaciones apagadas, cada QuantizeLinear/DequantizeLinear
+  se ejecuta tal cual y la convolucion en float. Es la aritmetica que define el grafo:
+  no depende del CPU y sirve para contrastar la medicion del dispositivo.
+
 Antes de correr, exige el SHA-256 del manifiesto, de `crops.jsonl` y de los tres
 modelos (los de `modelo/conversion.yaml` y `modelo/registros/registro_conversion.json`)
 y comprueba contra el manifiesto que la calibracion del INT8 uso solo train. Despues,
@@ -52,7 +61,7 @@ P3 = RAIZ.parent / "Proyecto3"
 RESULTADOS = AQUI / "resultados"
 
 SPLIT = "val"
-MODELOS = ("original", "fp32", "int8")
+MODELOS = ("original", "fp32", "int8", "int8_referencia")
 BUCKET = "p4-capturas-474665692638"
 
 # Una prediccion: probabilidades (softmax) en el orden de clases del modelo.
@@ -214,6 +223,7 @@ def columnas(clases: list[str]) -> list[str]:
         "optimized_prediction",
         "fp32_prediction",
         "int8_prediction",
+        "int8_referencia_prediction",
         *(f"prob_{n}_{c}" for n in MODELOS for c in clases),
     ]
 
@@ -267,6 +277,9 @@ def resumen(filas: list[dict[str, Any]], clases: list[str]) -> dict[str, Any]:
             f["int8_prediction"] == f["original_prediction"] for f in filas
         ),
         "acuerdo_int8_vs_fp32": sum(f["int8_prediction"] == f["fp32_prediction"] for f in filas),
+        "acuerdo_int8_vs_int8_referencia": sum(
+            f["int8_prediction"] == f["int8_referencia_prediction"] for f in filas
+        ),
         "nota": "Metricas formales por clase y analisis de errores: VAL-04 (#14).",
         "clases_presentes": sorted({f["true_class"] for f in filas}) == sorted(clases),
     }
@@ -298,10 +311,11 @@ def crear_predictores(cfg: dict[str, Any]) -> tuple[dict[str, Predictor], list[s
             x = transformar(imagen.convert("RGB")).unsqueeze(0)
             return torch.softmax(modelo(x), dim=1)[0].tolist()
 
-    opciones = ort.SessionOptions()
-    opciones.log_severity_level = 3
-
-    def onnx(nombre: str) -> Predictor:
+    def onnx(nombre: str, optimizado: bool = True) -> Predictor:
+        opciones = ort.SessionOptions()
+        opciones.log_severity_level = 3
+        if not optimizado:
+            opciones.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
         sesion = ort.InferenceSession(
             str(cfg["modelos"][nombre]["ruta"]), opciones, providers=["CPUExecutionProvider"]
         )
@@ -321,7 +335,12 @@ def crear_predictores(cfg: dict[str, Any]) -> tuple[dict[str, Predictor], list[s
         "proveedor_onnx": "CPUExecutionProvider",
     }
     return (
-        {"original": original, "fp32": onnx("fp32"), "int8": onnx("int8")},
+        {
+            "original": original,
+            "fp32": onnx("fp32"),
+            "int8": onnx("int8"),
+            "int8_referencia": onnx("int8", optimizado=False),
+        },
         list(meta["class_names"]),
         entorno,
     )
@@ -344,8 +363,12 @@ def procesador() -> str:
     return platform.processor() or "desconocido"
 
 
-def descargar_modelos(cfg: dict[str, Any], perfil: str, bucket: str) -> None:
-    """Baja de S3 los modelos que falten en local (luego se exige su SHA-256)."""
+def descargar(cfg: dict[str, Any], perfil: str, bucket: str) -> None:
+    """Baja de S3 los modelos y los datos del P3 que falten en local.
+
+    Los datos viven en `datos/p3/` con las mismas rutas que bajo `Proyecto3/data/`. Lo
+    descargado no se da por bueno: despues se exige el SHA-256 de cada insumo.
+    """
     import boto3
 
     s3 = boto3.Session(profile_name=perfil).client("s3")
@@ -356,12 +379,28 @@ def descargar_modelos(cfg: dict[str, Any], perfil: str, bucket: str) -> None:
         print(f"Descargando {nombre}: s3://{bucket}/{modelo['s3']}")
         s3.download_file(bucket, modelo["s3"], str(modelo["ruta"]))
 
+    datos_p3 = (P3 / "data").resolve()
+    for carpeta in (cfg["manifiesto"]["ruta"].parent, cfg["recortes"]):
+        local = carpeta.resolve()
+        prefijo = "datos/p3/" + local.relative_to(datos_p3).as_posix() + "/"
+        print(f"Datos: s3://{bucket}/{prefijo} -> {local}")
+        for pagina in s3.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefijo):
+            for objeto in pagina.get("Contents", []):
+                destino = local / objeto["Key"][len(prefijo) :]
+                if not destino.is_file():
+                    destino.parent.mkdir(parents=True, exist_ok=True)
+                    s3.download_file(bucket, objeto["Key"], str(destino))
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--descargar", action="store_true", help="bajar de S3 los modelos")
+    parser.add_argument(
+        "--descargar",
+        action="store_true",
+        help="bajar de S3 los modelos y los datos del P3 que falten",
+    )
     parser.add_argument("--profile", help="perfil de AWS para --descargar")
     parser.add_argument("--bucket", default=BUCKET)
     args = parser.parse_args()
@@ -369,7 +408,7 @@ def main() -> None:
 
     cfg = configuracion()
     if args.descargar:
-        descargar_modelos(cfg, args.profile, args.bucket)
+        descargar(cfg, args.profile, args.bucket)
     try:
         exigir_sha(cfg["manifiesto"]["ruta"], cfg["manifiesto"]["sha256"], "manifiesto")
         exigir_sha(cfg["recortes"] / "crops.jsonl", cfg["crops_jsonl_sha256"], "crops.jsonl")
@@ -419,6 +458,13 @@ def main() -> None:
             }
             for n, m in cfg["modelos"].items()
         },
+        "columnas_int8": {
+            "int8": "onnxruntime con optimizaciones por defecto (kernels enteros); depende del "
+            "CPU en x86: U8S8 puede saturar sin VNNI",
+            "int8_referencia": "mismo model_int8.onnx con ORT_DISABLE_ALL: QDQ ejecutado tal "
+            "cual, independiente del CPU",
+            "optimized_prediction": "igual a int8_prediction",
+        },
         "calibracion": calibracion,
         "verificacion": verificacion,
         "resumen": resumen(filas, clases),
@@ -438,6 +484,7 @@ def main() -> None:
     r = evidencia["resumen"]
     print(f"accuracy: {r['accuracy']}")
     print(f"acuerdo int8/original: {r['acuerdo_int8_vs_original']}/{r['muestras']}")
+    print(f"acuerdo int8/int8_referencia: {r['acuerdo_int8_vs_int8_referencia']}/{r['muestras']}")
     print(f"calibracion solo train: {calibracion['solo_train']}; CSV ok: {verificacion['ok']}")
     if not (verificacion["ok"] and calibracion["solo_train"] and r["clases_presentes"]):
         raise SystemExit(1)
