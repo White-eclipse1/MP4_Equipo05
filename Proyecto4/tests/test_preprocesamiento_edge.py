@@ -186,3 +186,22 @@ def test_contraste_rechaza_mapeo_de_clases_roto():
         corrida("raspberry", "aarch64", cambiadas), corrida("laptop", "AMD64", FILAS), "p" * 64
     )
     assert "clases.mapeo" in fallidas(informe["comprobaciones"])
+
+
+@pytest.mark.skipif(
+    not (ce.EVIDENCIA / "raspberry" / "resultados.json").is_file(), reason="sin corrida del edge"
+)
+def test_la_evidencia_de_la_raspberry_se_contrasta_con_la_laptop():
+    """Lo versionado en evidencias/VAL-07/: preprocesamiento identico y mapeo de clases."""
+    import hashlib
+
+    informe = ce.contrastar(
+        ce.leer_corrida(ce.EVIDENCIA / "raspberry"),
+        ce.leer_corrida(ce.EVIDENCIA / "laptop"),
+        hashlib.sha256(ce.PREPROCESAR.read_bytes()).hexdigest(),
+    )
+    assert informe["ok"], fallidas(informe["comprobaciones"])
+    assert informe["predicciones"]["fp32"]["distintas_edge_laptop"] == []
+    assert informe["predicciones"]["int8_referencia"]["distintas_edge_laptop"] == []
+    h = informe["int8_igual_a_referencia"]
+    assert h["edge"] == h["entradas"] == 295

@@ -31,6 +31,8 @@ Las diferencias están en muestras que el original clasifica con mucha seguridad
 - si ahí `int8` coincide con `int8_referencia`, la hipótesis gana fuerza;
 - si no coincide, hay otra causa que buscar.
 
+> **Actualización (VAL-07, 16 oct).** En la Raspberry Pi 4 (aarch64), el mismo `model_int8.onnx` con onnxruntime por defecto **coincide con `int8_referencia` en las 295 entradas** de VAL-07 y acierta 290 de 292 en `val`. Los tensores preprocesados son idénticos bit a bit a los de la laptop. La hipótesis gana fuerza: las 4 diferencias de la laptop dependen del kernel entero en su CPU x86, y no del modelo ni del preprocesamiento. Detalle en [`preprocesamiento-edge.md`](preprocesamiento-edge.md#corrida-en-la-raspberry-16-oct-de-2026).
+
 Mientras tanto, el CSV trae dos columnas del INT8 y la evidencia registra el nombre del CPU:
 
 - **`int8`** (`optimized_prediction`): lo que ejecuta el runtime en la máquina que corre la comparación.
