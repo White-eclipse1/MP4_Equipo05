@@ -6,7 +6,9 @@ Dos partes: la falla y el reintento **desde la Raspberry** con una captura físi
 
 **Captura:** `edge01-211538a088644fe19b3f579367d5b2c8` (`cat` 0.9987), tomada por Omar el 16 oct de 2026 a las 16:34:01 (UTC-06:00) y enviada con el programa de EDGE-06. Su recorrido completo está en INT-06.
 
-**Cómo se provocó la falla:** Omar apagó el Wi-Fi (procedimiento reversible: se vuelve a encender, nada se borra ni se reconfigura). [`telefono-sin-wifi-ni-datos.webp`](telefono-sin-wifi-ni-datos.webp): el teléfono, que da la cámara por USB, con Wi-Fi y datos móviles apagados el viernes 16 oct; la foto no muestra la hora, así que la que vale es la del log.
+**Por qué falló y cómo se recuperó** (detalle en `docs/edge06-envio.md` de EDGE-06, #45):
+- La Raspberry tenía como ruta por defecto el enlace USB del teléfono que hace de cámara (`usb0`), y el teléfono tenía el Wi-Fi y los datos móviles **apagados**. Sin salida a Internet, los 3 intentos fallaron por red. [`telefono-sin-wifi-ni-datos.webp`](telefono-sin-wifi-ni-datos.webp) muestra el teléfono así el viernes 16 oct; la foto no tiene hora, así que la que vale es la del log.
+- Omar quitó esa ruta por defecto (`sudo ip route del default … dev usb0`), sin tocar la subred de la cámara, y la Raspberry salió por su Wi-Fi (`wlan0`). Se ve en la captura de la terminal de EDGE-06. Es reversible: la ruta se vuelve a crear al reconectar el anclaje USB, y nada se borra.
 
 [`envios-edge06.jsonl`](envios-edge06.jsonl) es el log de envíos que escribió la Raspberry, entregado sin editar (manifiesto con SHA-256; `3b0c826b…c4d9`):
 
@@ -22,13 +24,14 @@ Dos partes: la falla y el reintento **desde la Raspberry** con una captura físi
 
 | Criterio | Evidencia |
 |---|---|
-| Procedimiento reversible para provocar la falla | Apagar el Wi-Fi y volver a encenderlo; el procedimiento repetible está [abajo](#procedimiento-en-el-dispositivo) |
+| Procedimiento reversible para provocar la falla | Dejar la Raspberry sin salida a Internet (aquí, la ruta por el teléfono sin datos) y restablecerla (quitar esa ruta y salir por `wlan0`). El procedimiento repetible está [abajo](#procedimiento-en-el-dispositivo) |
 | La falla queda visible en el dispositivo | El programa registra cada intento fallido con su motivo: 3 líneas de 17:24 en el log |
 | El evento local se conserva | Cada falla dice "evento local conservado", y el mismo evento (`c3e01eb1…`) es el que llegó después a S3 |
 | Al restablecer la conectividad se reintenta | 17:26:59 → `201 creado` |
 | El reintento usa exactamente el mismo `capture_id` | Los 5 intentos llevan el mismo ID y los mismos SHA-256 de evento y foto |
 | AWS contiene un solo registro final y una foto recuperable | Una versión de cada objeto; foto descargada idéntica a la de la Raspberry |
 | Repetir exactamente el evento produce `duplicado` | 17:28:43 → `200 duplicado`, sin cambiar `received_at` |
+| Reutilizar el ID con otro contenido produce conflicto, también desde el dispositivo | 17:29:48: una copia de prueba del evento con `confidence` 0.5 → `409 conflicto_capture_id` (`guardado` 0.9987…, `recibido` 0.5), sin reintento. Log en `evidencias/EDGE-06/conflicto/` (#45). S3 sigue con 0.9987 y una sola versión |
 
 ## Receptor desplegado y S3, con una captura de prueba
 
