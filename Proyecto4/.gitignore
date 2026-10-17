@@ -26,3 +26,7 @@ __pycache__/
 
 # Salida local de modelo/convertir.py (pesos publicados en S3, ver docs/modelo-optimizado.md)
 /modelo/artefactos/
+
+# Paquete de entradas de VAL-07 (recortes del P3; se reconstruye con validacion/preparar_entradas_edge.py)
+/validacion/entradas_edge/
+/validacion/entradas_edge.zip
