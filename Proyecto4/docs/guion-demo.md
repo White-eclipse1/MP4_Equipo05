@@ -10,7 +10,7 @@ Sigue el orden en que la rúbrica observa el recorrido ([`rubrica.md`](rubrica.m
 |---|---|---|
 | `app/eventos.py` (EDGE-05) | Pide una foto nueva a la cámara, la clasifica en local y guarda el JPEG y el evento en `<salida>/`. **No envía** | `python -u app/eventos.py --modelo modelo/model_int8.onnx --url "$CAMERA_URL" --cantidad <n> --salida demo` |
 | `app/enviar.py` (EDGE-06) | Envía **un evento ya guardado** y su JPEG. Reintenta solo ante falla de red o 503, con el mismo evento | `python -u app/enviar.py --evento demo/eventos/<capture_id>.json --log demo/envios.jsonl` |
-| `app/offline.py` (EDGE-04, EDGE-08) | Carga el modelo **una sola vez** y, sin cerrarse, clasifica antes, durante y después del corte de red, con la misma sesión y el mismo PID. **No envía** | `python -u app/offline.py --modelo modelo/model_int8.onnx --url "$CAMERA_URL" --salida demo/offline` |
+| `app/offline.py` (EDGE-04, EDGE-08) | Carga el modelo **una sola vez, antes del corte de red**, y sin cerrarse clasifica durante el corte y después de reconectar, con la misma sesión y el mismo PID. **No envía** | `python -u app/offline.py --modelo modelo/model_int8.onnx --url "$CAMERA_URL" --salida demo/offline` |
 
 `enviar.py` necesita el token en la Terminal, sin mostrarlo: `read -r -s -p "Token del dispositivo: " P4_TOKEN_DISPOSITIVO; echo; export P4_TOKEN_DISPOSITIVO`. Al terminar, `unset P4_TOKEN_DISPOSITIVO`.
 
