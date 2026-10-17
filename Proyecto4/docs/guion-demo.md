@@ -2,14 +2,15 @@
 
 Sigue el orden en que la rúbrica observa el recorrido ([`rubrica.md`](rubrica.md), "B. Observar el recorrido"). Duración objetivo: 10 a 15 minutos. Cada paso dice **quién** lo hace, **qué se muestra** y **con qué comando**, para que nadie improvise.
 
-> Los comandos del dispositivo son los de EDGE-05 y EDGE-06, probados el 16 oct en la Raspberry. Runbook completo del dispositivo: [`edge08-runbook.md`](edge08-runbook.md).
+> Los comandos del dispositivo son los de EDGE-04 a EDGE-08, probados el 16 oct en la Raspberry. Runbook completo del dispositivo: [`edge08-runbook.md`](edge08-runbook.md).
 
-**En el dispositivo hay dos programas, que se corren por separado** desde `$HOME/edge01`, con `source .venv/bin/activate`:
+**En el dispositivo se usan tres programas, cada uno por separado**, desde `$HOME/edge01`, con `source .venv/bin/activate` y la URL de la cámara en `CAMERA_URL` (`export CAMERA_URL="http://<ip-del-telefono>:8080/shot.jpg"`):
 
 | Programa | Hace | Comando |
 |---|---|---|
-| `app/eventos.py` (EDGE-05) | Pide una foto nueva a la cámara, la clasifica en local y guarda el JPEG y el evento en `<salida>/`. **No envía** | `python -u app/eventos.py --modelo modelo/model_int8.onnx --url "http://<ip-del-telefono>:8080/shot.jpg" --cantidad <n> --salida demo` |
+| `app/eventos.py` (EDGE-05) | Pide una foto nueva a la cámara, la clasifica en local y guarda el JPEG y el evento en `<salida>/`. **No envía** | `python -u app/eventos.py --modelo modelo/model_int8.onnx --url "$CAMERA_URL" --cantidad <n> --salida demo` |
 | `app/enviar.py` (EDGE-06) | Envía **un evento ya guardado** y su JPEG. Reintenta solo ante falla de red o 503, con el mismo evento | `python -u app/enviar.py --evento demo/eventos/<capture_id>.json --log demo/envios.jsonl` |
+| `app/offline.py` (EDGE-04, EDGE-08) | Carga el modelo **una sola vez** y, sin cerrarse, clasifica antes, durante y después del corte de red, con la misma sesión y el mismo PID. **No envía** | `python -u app/offline.py --modelo modelo/model_int8.onnx --url "$CAMERA_URL" --salida demo/offline` |
 
 `enviar.py` necesita el token en la Terminal, sin mostrarlo: `read -r -s -p "Token del dispositivo: " P4_TOKEN_DISPOSITIVO; echo; export P4_TOKEN_DISPOSITIVO`. Al terminar, `unset P4_TOKEN_DISPOSITIVO`.
 
@@ -55,13 +56,33 @@ Sigue el orden en que la rúbrica observa el recorrido ([`rubrica.md`](rubrica.m
 
 - El evaluador elige y acomoda los objetos; Omar pulsa Enter para cada uno. Por cada foto sale una línea `evento_guardado` con el `capture_id`, la clase, la confianza, los logits y el tiempo de preprocesamiento e inferencia. La foto y el evento quedan en `demo/capturas/` y `demo/eventos/`.
 
-### 3. Sin red (Omar, 1 min)
+### 3. Sin red, con el modelo ya cargado (Omar, 3 min)
 
-- Omar **quita la salida a Internet**: apaga el Wi-Fi de la Raspberry y deja el teléfono sin Wi-Fi ni datos, con el anclaje USB e IP Webcam encendidos, porque son la cámara y captura otra vez con `eventos.py`: sigue clasificando, porque la inferencia es local ([`edge04-offline.md`](edge04-offline.md)). **Esa captura no se sube después**: la rúbrica no lo exige.
+Es la secuencia de `offline.py` del [runbook de EDGE-08](edge08-runbook.md) (sección 5), ensayada el 16 oct ([`evidencias/EDGE-08/`](../evidencias/EDGE-08/), `offline-final/`). Demuestra que **el mismo proceso, con el modelo ya cargado, sigue clasificando al cortar la red**. Se opera desde la pantalla y el teclado de la Raspberry, porque una sesión SSH se corta, y con dos Terminales locales. Antes de empezar, Omar tiene a mano dos escenas de clases distintas.
 
-### 4. Reconexión y captura nueva (Omar, 1 min)
+1. **Terminal 1:** `python -u app/offline.py --modelo modelo/model_int8.onnx --url "$CAMERA_URL" --salida demo/offline`. Espera `MODELO CARGADO` y **no pulsa Enter**.
+2. **Corte:** apaga el Wi-Fi (y el Ethernet) de la Raspberry y el Wi-Fi y los datos del teléfono. El anclaje USB e IP Webcam se quedan encendidos, porque son la cámara. En la **Terminal 2** guarda el estado sin red:
 
-- Omar reconecta la red (comprueba `ip route get 54.80.197.58` → `dev wlan0`), hace una captura nueva con `eventos.py` y la envía con `enviar.py`: `201 creado`. Lee su `capture_id` en voz alta y Mauricio lo anota.
+   ```bash
+   { date --iso-8601=seconds; ip -br address; ip route; curl -4 --connect-timeout 5 --max-time 10 -I https://example.com; } > "$HOME/edge01/demo/offline/red-offline-antes.txt" 2>&1
+   ```
+
+3. **Terminal 1:** confirma el corte y clasifica **dos escenas de clases distintas**. Siguen saliendo clase y confianza, con la misma sesión y el mismo PID.
+4. Cuando el programa pide reconectar, **lo deja esperando**, sin Enter. En la Terminal 2, todavía sin red, repite el comando del paso 2 guardando en `red-offline-despues.txt`.
+5. **Reconexión:** enciende el Wi-Fi de la Raspberry y comprueba la salida por esa interfaz. Debe responder HTTP correcto:
+
+   ```bash
+   { date --iso-8601=seconds; ip -br address; ip route; curl -4 --interface wlan0 --connect-timeout 5 --max-time 15 -I https://example.com; } > "$HOME/edge01/demo/offline/red-reconectada.txt" 2>&1; cat "$HOME/edge01/demo/offline/red-reconectada.txt"
+   ```
+
+6. **Terminal 1:** confirma la reconexión y hace la tercera captura. En `demo/offline/offline.jsonl` hay una sola carga del modelo, anterior al corte, y las tres clasificaciones tienen el mismo `session_id` y PID.
+
+`offline.py` no envía: **estas capturas no se suben**, y la rúbrica no lo exige.
+
+### 4. Captura nueva y envío a AWS (Omar, 1 min)
+
+- Omar comprueba que la Raspberry sale por el Wi-Fi: `ip route get 54.80.197.58` debe decir `dev wlan0`. Si dice `dev usb0`, corrige la ruta ([`fallo-reintento.md`](fallo-reintento.md)).
+- Hace **una captura nueva** con `eventos.py --cantidad 1` y la envía con `enviar.py`: `201 creado`. Lee su `capture_id` en voz alta y Mauricio lo anota.
 
 ### 5. La captura llega a AWS (Diego, 2 min)
 

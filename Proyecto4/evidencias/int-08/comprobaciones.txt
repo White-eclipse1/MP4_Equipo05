@@ -1,4 +1,4 @@
-Comprobaciones previas a la entrega, 2026-10-17T03:54:32Z (desde la laptop de Diego)
+Comprobaciones previas a la entrega, 2026-10-17T04:10:38Z (desde la laptop de Diego)
 
 1. Portal sin usuario (debe ser 401):
    GET / -> 401
@@ -12,4 +12,4 @@ Comprobaciones previas a la entrega, 2026-10-17T03:54:32Z (desde la laptop de Di
 5. Capturas en S3:
    edge01: 24 eventos
 6. Enlaces del paquete:
-   34 documentos revisados; 0 enlace(s) roto(s)
+   35 documentos revisados; 0 enlace(s) roto(s)

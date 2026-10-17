@@ -53,7 +53,7 @@ Cierre del P4. La ficha de entrega es [`README.md`](../../README.md), el índice
 | Portal probado | 17 oct, 03:50 UTC: Capturas Edge muestra las 26 capturas ([`operacion/portal-capturas-edge.webp`](../operacion/portal-capturas-edge.webp)). Sin usuario responde `401` ([`comprobaciones.txt`](comprobaciones.txt)) |
 | Dispositivo probado | Omar, 17 oct a las 03:35 UTC: envío de las 22 capturas de EDGE-07, todas `201` y verificadas en S3. Ensayo del runbook el 16 oct ([`EDGE-08/`](../EDGE-08/)). La reproducción por otro integrante **no se realizó** |
 | Acceso de lectura a AWS probado | [`comprobaciones.txt`](comprobaciones.txt): identidad `p4-lectura`, escritura denegada (`AccessDenied`) y 24 eventos de `edge01`; además, las 22 consultas de [`operacion/verificacion-s3.txt`](../operacion/verificacion-s3.txt) |
-| Todos los enlaces del paquete abren | [`scripts/verificar_enlaces.py`](../../scripts/verificar_enlaces.py): 34 documentos y 0 enlaces rotos. El CI lo repite en `tests/test_enlaces.py` |
+| Todos los enlaces del paquete abren | [`scripts/verificar_enlaces.py`](../../scripts/verificar_enlaces.py): 35 documentos y 0 enlaces rotos. El CI lo repite en `tests/test_enlaces.py` |
 
 [`comprobaciones.txt`](comprobaciones.txt) también registra que el receptor sin token responde `401 no_autorizado`.
 

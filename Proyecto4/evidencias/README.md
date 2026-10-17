@@ -8,7 +8,7 @@
 
 | Evidencia | Dónde | Estado |
 |---|---|---|
-| Ficha de entrega y README | [`../README.md`](../README.md) | ✅ con los datos del dispositivo de EDGE-01; faltan los comandos del programa del dispositivo (EDGE-08) |
+| Ficha de entrega y README | [`../README.md`](../README.md) | ✅ con el dispositivo (EDGE-01), los comandos de captura, envío y sin red, y el runbook de EDGE-08 ([`../docs/edge08-runbook.md`](../docs/edge08-runbook.md)) |
 | Identificación del modelo del P3 | [`../docs/linaje-modelo.md`](../docs/linaje-modelo.md), [`../modelo/registros/linaje_verificacion.json`](../modelo/registros/linaje_verificacion.json) | ✅ VAL-01 |
 | Variante optimizada | [`../docs/modelo-optimizado.md`](../docs/modelo-optimizado.md), [`../modelo/registros/registro_conversion.json`](../modelo/registros/registro_conversion.json); archivo en `s3://p4-capturas-474665692638/modelos/clasificador-edge/1.0.0-int8-e05.1/` | ✅ |
 | Comparación de calidad (predicciones por muestra, accuracy y F1) | Predicciones por muestra del original y del INT8 sobre las 292 de `val`: [`../validacion/resultados/predicciones_val.csv`](../validacion/resultados/predicciones_val.csv), verificador [`../validacion/verificar_predicciones.py`](../validacion/verificar_predicciones.py) y [`../docs/comparacion-modelos.md`](../docs/comparacion-modelos.md) (VAL-02, VAL-03); métricas por clase y errores: [`../validacion/resultados/metricas_val.csv`](../validacion/resultados/metricas_val.csv) y [`../docs/metricas-val.md`](../docs/metricas-val.md) (VAL-04); INT8 en la Raspberry con preprocesamiento bit a bit ([`VAL-07/`](VAL-07/)). Paquete recalculable: [`VAL-08/`](VAL-08/) (`python recalcular.py` → `VERIFICADO`) | ✅ |
