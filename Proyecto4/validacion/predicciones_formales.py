@@ -12,9 +12,10 @@ modelos) y del manifiesto del P3, escribe en `validacion/resultados/`:
 - `manifiesto/manifest_val.jsonl` y `manifiesto/manifest.meta.json`: las lineas `val`
   del manifiesto, byte a byte, y su meta, para verificar sin acceso a los datos del P3.
 
-`optimized_prediction` es lo que ejecuta onnxruntime en la maquina donde corrio VAL-02
-(columna `int8`); VAL-07 lo regenera con la corrida del dispositivo pasando
-`--comparacion`. Antes de escribir, exige los SHA-256 de origen y corre
+`optimized_prediction` es la columna `int8` de la comparacion de origen: con
+`--comparacion validacion/resultados/comparacion_val_edge.csv` (VAL-08) es el INT8
+ejecutado en la Raspberry; con la de VAL-02, el de la laptop. Antes de escribir, exige
+los SHA-256 de origen y corre
 `verificar_predicciones.verificar` con el manifiesto completo; si algo falla no toca
 la evidencia existente.
 
@@ -102,6 +103,7 @@ def main() -> None:
         help="CSV de comparar_modelos.py (su .json al lado); VAL-07: la corrida del edge",
     )
     args = parser.parse_args()
+    args.comparacion = args.comparacion.resolve()
     sys.stdout.reconfigure(encoding="utf-8")
 
     cfg = comp.configuracion()
@@ -192,8 +194,11 @@ def main() -> None:
                 "runtime": f"onnxruntime {entorno['onnxruntime']} {entorno['proveedor_onnx']}, "
                 "optimizaciones por defecto",
                 "maquina": f"{entorno['procesador']} ({entorno['sistema']} {entorno['maquina']})",
-                "nota": "corrida en la laptop de VAL; VAL-07 (#19) la regenera en el "
-                "dispositivo, que es la cifra de la rubrica",
+                "nota": comparacion_json.get(
+                    "nota_optimizado",
+                    "corrida en la laptop de VAL; VAL-07 (#19) la regenera en el "
+                    "dispositivo, que es la cifra de la rubrica",
+                ),
             },
         },
         "fuente": {

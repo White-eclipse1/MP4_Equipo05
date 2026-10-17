@@ -24,8 +24,8 @@ Original y optimizado medidos **en la misma Raspberry Pi 4 Model B** (1 GB, Cort
 | Preprocesamiento p50 (mismo código) | 42.61 ms | 42.30 ms | −0.73 % (sin cambio real) |
 | Memoria pico del proceso | 184.2 MiB | 114.4 MiB | −37.86 % |
 | Carga de la sesión (1 medición) | 311.6 ms | 152.0 ms | −51.2 % |
-| Accuracy en `val` (VAL-04) | 99.658 % | 98.630 % | **−1.0274 pp** (cumple ≤ 2 pp) |
-| F1 macro en `val` (VAL-04) | 99.537 % | 98.479 % | −1.0585 pp |
+| Accuracy en `val` (VAL-04, INT8 en la Raspberry) | 99.658 % | 99.315 % | **−0.3425 pp** (cumple ≤ 2 pp) |
+| F1 macro en `val` (VAL-04, INT8 en la Raspberry) | 99.537 % | 99.075 % | −0.4619 pp |
 
 En la columna "Original", la latencia y la memoria corresponden al original exportado a ONNX FP32: los mismos pesos (VAL-01 verificó la paridad con PyTorch) en el mismo runtime que la variante, que es lo que exige el criterio 3.1. El tamaño se reporta de las dos formas: contra el `model.pt` publicado por el P3 y contra el FP32 en el mismo formato ONNX.
 
@@ -61,21 +61,21 @@ python validacion/recursos.py   # verifica VAL-05 y regenera recursos_edge.*
 
 La aceleración se concentra en la inferencia (−51.8 %). El preprocesamiento (unos 42 ms: decodificar un JPEG de 1920 × 1080 y redimensionarlo) es el mismo código y no cambia. Por eso el total mejora menos que la inferencia sola: ese preprocesamiento es ahora el 37 % del tiempo del INT8.
 
-**Qué no se compara.** No se usan tiempos de la laptop para calcular aceleración: las dos latencias son del mismo dispositivo. Las cifras de la laptop de VAL-02 son de **calidad** y no se mezclan con las de recursos.
+**Qué no se compara.** No se usan tiempos de la laptop para calcular aceleración: las dos latencias son del mismo dispositivo. La calidad del optimizado también es la del dispositivo (VAL-07). La del original es la de PyTorch offline (VAL-02), y en la Raspberry su FP32 da las mismas 292 predicciones.
 
 ## Intercambio entre recursos y calidad
 
 | Se gana | Se paga |
 |---|---|
-| Un modelo 3.96 veces más chico (−74.8 %) | −1.03 pp de accuracy en `val`: 3 aciertos menos de 292 (291 → 288) |
-| Inferencia 1.67 veces más rápida en la Raspberry (−40.3 % en p50 y p95) | −1.06 pp de F1 macro |
+| Un modelo 3.96 veces más chico (−74.8 %) | −0.34 pp de accuracy en `val`: 1 acierto menos de 292 (291 → 290) |
+| Inferencia 1.67 veces más rápida en la Raspberry (−40.3 % en p50 y p95) | −0.46 pp de F1 macro |
 | 38 % menos memoria pico | |
 
-**Relación entre la reducción de tamaño y la caída de accuracy.** Por cada punto porcentual de accuracy perdido, el modelo se reduce unos 73 puntos porcentuales de tamaño (74.78 / 1.0274) y la latencia, unos 39 (40.29 / 1.0274). La caída queda dentro del límite de 2 pp con margen: 0.97 pp.
+**Relación entre la reducción de tamaño y la caída de accuracy.** Por cada punto porcentual de accuracy perdido, el modelo se reduce unos 218 puntos porcentuales de tamaño (74.78 / 0.3425) y la latencia, unos 118 (40.29 / 0.3425). La caída queda dentro del límite de 2 pp con un margen de 1.66 pp.
 
 **Por qué compensa en este hardware.**
 - La Raspberry de la demostración tiene **1 GB de RAM** (927 MB visibles). El INT8 deja libres unos 70 MiB más para la captura, el envío y el sistema.
 - A 113.5 ms por foto, el edge clasifica unas **8.8 fotos por segundo**, contra unas 5.3 del original. Eso deja margen para capturar y enviar sin acumular retraso.
-- El costo en calidad es pequeño y está explicado (VAL-04): `person` conserva su recall de 100 %. De las regresiones, solo una (`a559`, una muestra en la que el original ya dudaba) aparece también con la aritmética de referencia del grafo. Las demás dependen de cómo ejecuta el INT8 la CPU x86 de la laptop.
+- El costo en calidad es pequeño y está explicado (VAL-04): una sola muestra (`a559`), en la que el original ya dudaba y en la que el INT8 empata exactamente `cat` y `dog`. `person` conserva precisión y recall de 100 %.
 
-**Advertencia sobre la calidad.** La accuracy del optimizado (98.630 %) es la del INT8 ejecutado en la **laptop** de VAL; la de la Raspberry corresponde a VAL-07. Con la aritmética de referencia del grafo, la caída sería de una sola muestra (0.34 pp). Si en el dispositivo el INT8 coincide con la referencia, como sugiere la hipótesis de VAL-02, el intercambio es todavía más favorable. En cualquier caso, la caída que se reporta aquí es la más desfavorable medida.
+**Calidad y recursos, del mismo dispositivo.** La accuracy del optimizado (99.315 %) es la del INT8 ejecutado en la Raspberry, el mismo que se midió en latencia (VAL-07 y VAL-05). En la laptop de VAL, ese INT8 daba 98.630 % por cómo lo ejecuta su CPU x86 (ver [`metricas-val.md`](metricas-val.md#comparación-con-la-laptop-contexto)). Incluso con esa cifra, más desfavorable, la caída (1.03 pp) también cumplía el límite.

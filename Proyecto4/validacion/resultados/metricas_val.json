@@ -1,14 +1,14 @@
 {
   "schema_version": 1,
   "tarea": "VAL-04 (#14)",
-  "generado_en": "2026-10-16T05:33:50+00:00",
+  "generado_en": "2026-10-17T01:34:24+00:00",
   "comando": "python validacion/metricas.py",
   "fuente": {
     "predicciones": "validacion/resultados/predicciones_val.csv",
-    "sha256": "cece1b077498309b118780e10a014c1830e7151adb1d09523e89e420b7f27a66",
+    "sha256": "08e07c060e29262c854635eabfb04f5df7da9e183e9935b61915dbf04c96ea52",
     "manifest_id": "m-0.1.3-s42-1",
     "verificacion": "verificar_predicciones.verificar: ok",
-    "optimizado": "AMD Ryzen 5 5625U with Radeon Graphics (Windows AMD64)"
+    "optimizado": "Raspberry Pi 4 Model B Rev 1.5 (Debian GNU/Linux 13 (trixie) aarch64)"
   },
   "particion": "val",
   "clases": [
@@ -79,36 +79,36 @@
     },
     "optimized": {
       "muestras": 292,
-      "aciertos": 288,
-      "accuracy": 0.9863013698630136,
-      "accuracy_fraccion": "288/292",
-      "f1_macro": 0.9847851953115111,
+      "aciertos": 290,
+      "accuracy": 0.9931506849315068,
+      "accuracy_fraccion": "290/292",
+      "f1_macro": 0.9907513713483863,
       "por_clase": {
         "cat": {
-          "precision": 0.9848484848484849,
-          "recall": 0.9701492537313433,
-          "f1": 0.9774436090225563,
+          "precision": 0.9850746268656716,
+          "recall": 0.9850746268656716,
+          "f1": 0.9850746268656716,
           "support": 67,
-          "tp": 65,
+          "tp": 66,
           "fp": 1,
-          "fn": 2
+          "fn": 1
         },
         "dog": {
-          "precision": 1.0,
-          "recall": 0.9743589743589743,
-          "f1": 0.987012987012987,
+          "precision": 0.9871794871794872,
+          "recall": 0.9871794871794872,
+          "f1": 0.9871794871794872,
           "support": 78,
-          "tp": 76,
-          "fp": 0,
-          "fn": 2
+          "tp": 77,
+          "fp": 1,
+          "fn": 1
         },
         "person": {
-          "precision": 0.98,
+          "precision": 1.0,
           "recall": 1.0,
-          "f1": 0.98989898989899,
+          "f1": 1.0,
           "support": 147,
           "tp": 147,
-          "fp": 3,
+          "fp": 0,
           "fn": 0
         }
       },
@@ -120,14 +120,14 @@
         ],
         "filas_real_columnas_predicha": [
           [
-            65,
-            0,
-            2
+            66,
+            1,
+            0
           ],
           [
             1,
-            76,
-            1
+            77,
+            0
           ],
           [
             0,
@@ -139,76 +139,40 @@
     }
   },
   "caida_accuracy": {
-    "pp": 1.0273972602739727,
-    "pp_fraccion": "75/73",
+    "pp": 0.3424657534246575,
+    "pp_fraccion": "25/73",
     "limite_pp": 2.0,
     "cumple": true,
     "nota": "(aciertos_original - aciertos_optimizado) / muestras * 100, con fracciones exactas; la comparacion con el limite no redondea"
   },
   "cambio_por_clase_pp": {
     "cat": {
-      "precision": -1.5151515151515151,
-      "recall": -1.492537313432836,
-      "f1": -1.5037593984962405
+      "precision": -1.492537313432836,
+      "recall": 0.0,
+      "f1": -0.7406576141847155
     },
     "dog": {
-      "precision": 1.2658227848101267,
-      "recall": -2.5641025641025643,
-      "f1": -0.661758623542063
+      "precision": -0.01622849724115547,
+      "recall": -1.2820512820512822,
+      "f1": -0.6451086068920464
     },
     "person": {
-      "precision": -2.0,
+      "precision": 0.0,
       "recall": 0.0,
-      "f1": -1.0101010101010102
+      "f1": 0.0
     }
   },
   "errores_relevantes": [
     {
-      "sample_id": "0.1.3:a1647",
-      "tipo": "regresion",
-      "true_class": "cat",
-      "original_prediction": "cat",
-      "optimized_prediction": "person",
-      "prob_original_real": 0.9909472465515137,
-      "prob_original_predicha": 0.9909472465515137,
-      "prob_optimized_real": 0.40864598751068115,
-      "prob_optimized_predicha": 0.5713340640068054,
-      "int8_referencia_prediction_val02": "cat"
-    },
-    {
       "sample_id": "0.1.3:a322",
-      "tipo": "correccion",
+      "tipo": "ambos_fallan",
       "true_class": "cat",
       "original_prediction": "dog",
-      "optimized_prediction": "cat",
+      "optimized_prediction": "dog",
       "prob_original_real": 0.10443587601184845,
       "prob_original_predicha": 0.8912931680679321,
-      "prob_optimized_real": 0.6007176041603088,
-      "prob_optimized_predicha": 0.6007176041603088,
-      "int8_referencia_prediction_val02": "dog"
-    },
-    {
-      "sample_id": "0.1.3:a448",
-      "tipo": "regresion",
-      "true_class": "cat",
-      "original_prediction": "cat",
-      "optimized_prediction": "person",
-      "prob_original_real": 0.999686598777771,
-      "prob_original_predicha": 0.999686598777771,
-      "prob_optimized_real": 0.47278261184692383,
-      "prob_optimized_predicha": 0.5055569410324097,
-      "int8_referencia_prediction_val02": "cat"
-    },
-    {
-      "sample_id": "0.1.3:a554",
-      "tipo": "regresion",
-      "true_class": "dog",
-      "original_prediction": "dog",
-      "optimized_prediction": "person",
-      "prob_original_real": 0.5534741878509521,
-      "prob_original_predicha": 0.5534741878509521,
-      "prob_optimized_real": 0.45797672867774963,
-      "prob_optimized_predicha": 0.523673415184021,
+      "prob_optimized_real": 0.14796692751853288,
+      "prob_optimized_predicha": 0.8452539917080922,
       "int8_referencia_prediction_val02": "dog"
     },
     {
@@ -219,8 +183,8 @@
       "optimized_prediction": "cat",
       "prob_original_real": 0.5834636688232422,
       "prob_original_predicha": 0.5834636688232422,
-      "prob_optimized_real": 0.11116991192102432,
-      "prob_optimized_predicha": 0.8878766298294067,
+      "prob_optimized_real": 0.4995415026313381,
+      "prob_optimized_predicha": 0.4995415026313381,
       "int8_referencia_prediction_val02": "cat"
     }
   ],
@@ -234,6 +198,6 @@
   },
   "tabla_antes_despues": {
     "archivo": "metricas_val.csv",
-    "sha256": "c5854558f4550c043d97d6256fca793812f799cbf5250383176c509ce8d2edb2"
+    "sha256": "8784d62bd18add007271e274d19c3d39b17f19bae91ecf771e482a73db956aba"
   }
 }

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "tarea": "VAL-06 (#18)",
-  "generado_en": "2026-10-16T19:14:14+00:00",
+  "generado_en": "2026-10-17T01:34:25+00:00",
   "comando": "python validacion/recursos.py",
   "fuentes": {
     "tiempos": {
@@ -131,21 +131,21 @@
       "particion": "val",
       "accuracy": {
         "original": 0.9965753424657534,
-        "optimizado": 0.9863013698630136
+        "optimizado": 0.9931506849315068
       },
       "f1_macro": {
         "original": 0.9953705920853088,
-        "optimizado": 0.9847851953115111
+        "optimizado": 0.9907513713483863
       },
-      "caida_accuracy_pp": 1.0273972602739727,
-      "caida_accuracy_pp_fraccion": "75/73",
+      "caida_accuracy_pp": 0.3424657534246575,
+      "caida_accuracy_pp_fraccion": "25/73",
       "cumple_2pp": true,
-      "optimizado_medido_en": "AMD Ryzen 5 5625U with Radeon Graphics (Windows AMD64)",
-      "nota": "accuracy del INT8 ejecutado en la laptop de VAL; la de la Raspberry es de VAL-07. Con la aritmetica de referencia (VAL-02) la caida es 1 muestra"
+      "optimizado_medido_en": "Raspberry Pi 4 Model B Rev 1.5 (Debian GNU/Linux 13 (trixie) aarch64)",
+      "nota": "accuracy del INT8 tal como se ejecuto en Raspberry Pi 4 Model B Rev 1.5 (Debian GNU/Linux 13 (trixie) aarch64), sobre la misma validacion que el original"
     }
   },
   "tabla_antes_despues": {
     "archivo": "recursos_edge.csv",
-    "sha256": "79f3133bfd288a7ae750b36da9075433d011ad1fe9b9e6b7d4f5c606721bdc43"
+    "sha256": "0c6c3641fbfaa417a977a75dcb8c21e9337c4a7fbd491bfed667940a8e75042f"
   }
 }
