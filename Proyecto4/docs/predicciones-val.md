@@ -55,16 +55,14 @@ En ese caso, además de comprobar su SHA-256, verifica que el extracto versionad
 |---|---:|
 | Muestras | 292 |
 | Aciertos del original | 291 |
-| Aciertos del optimizado | 288 |
-| Acuerdo entre original y optimizado | 287 |
+| Aciertos del optimizado | 290 |
+| Acuerdo entre original y optimizado | 291 |
 
 Las métricas por clase y el análisis de errores corresponden a VAL-04 (#14).
 
-**De dónde sale `optimized_prediction`.** Es la columna `int8` de la comparación de VAL-02: lo que ejecuta onnxruntime 1.31.0 con sus optimizaciones por defecto en la laptop de VAL (AMD Ryzen 5 5625U). Con el mismo archivo, la aritmética de referencia del grafo da 290 aciertos. La causa de la diferencia sigue siendo una hipótesis; está en [`comparacion-modelos.md`](comparacion-modelos.md). La cifra de la rúbrica es la del dispositivo: VAL-07 (#19) corre la comparación en el edge y regenera este archivo con:
+**De dónde sale `optimized_prediction`.** Es el INT8 **ejecutado en la Raspberry Pi 4 de la demostración**, que es la cifra de la rúbrica. Corresponde a la columna `int8` de la corrida de VAL-07 en el dispositivo: onnxruntime 1.31.0 con sus optimizaciones por defecto, el mismo preprocesamiento bit a bit que offline. [`comparacion_edge.py`](../validacion/comparacion_edge.py) la une con el original de VAL-02 en [`comparacion_val_edge.csv`](../validacion/resultados/comparacion_val_edge.csv), y las probabilidades son el softmax de los logits registrados en el dispositivo. `original_prediction` es el `model.pt` en PyTorch: solo corre offline, pero en la Raspberry su exportación FP32 da las mismas 292 predicciones.
 
-```bash
-modelo/.venv/Scripts/python validacion/predicciones_formales.py --comparacion <CSV de la corrida en el edge>
-```
+Antes (16 oct), este archivo usaba el INT8 de la laptop de VAL (AMD Ryzen 5 5625U, 288 aciertos). En el dispositivo el INT8 coincide con la aritmética de referencia del grafo en las 295 entradas de VAL-07 (ver [`preprocesamiento-edge.md`](preprocesamiento-edge.md)). La comparación de la laptop se conserva en [`comparacion_val.csv`](../validacion/resultados/comparacion_val.csv) (VAL-02).
 
 ## Exclusiones
 
@@ -77,11 +75,12 @@ Antes de armar el manifiesto, el P3 dejó fuera las 661 anotaciones de `car` y `
 Desde `Proyecto4/`, con el entorno de VAL ([`comparacion-modelos.md`](comparacion-modelos.md#reproducir)) y el manifiesto del P3 en local:
 
 ```bash
-modelo/.venv/Scripts/python validacion/predicciones_formales.py
+modelo/.venv/Scripts/python validacion/comparacion_edge.py
+modelo/.venv/Scripts/python validacion/predicciones_formales.py --comparacion validacion/resultados/comparacion_val_edge.csv
 ```
 
-[`predicciones_formales.py`](../validacion/predicciones_formales.py) no vuelve a correr los modelos: une `comparacion_val.csv` de VAL-02 con el manifiesto. Antes de escribir:
+[`predicciones_formales.py`](../validacion/predicciones_formales.py) no vuelve a correr los modelos: une la comparación con el manifiesto. Antes de escribir:
 - exige el SHA-256 del manifiesto y que el CSV de la comparación sea el que registra su JSON;
 - corre la misma verificación con el manifiesto completo.
 
-Si algo falla, no toca la evidencia existente. Dos corridas dan el mismo CSV (`cece1b07…`), el mismo extracto (`d307002a…`) y el mismo meta (`f1e832d4…`).
+Si algo falla, no toca la evidencia existente. Dos corridas dan el mismo CSV (`08e07c06…`), el mismo extracto (`d307002a…`) y el mismo meta (`f1e832d4…`).

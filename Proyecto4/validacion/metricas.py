@@ -45,7 +45,6 @@ RAIZ = AQUI.parent  # Proyecto4/
 P3 = RAIZ.parent / "Proyecto3"
 JSON_SALIDA = ver.RESULTADOS / "metricas_val.json"
 CSV_SALIDA = ver.RESULTADOS / "metricas_val.csv"
-COMPARACION = ver.RESULTADOS / "comparacion_val.csv"
 
 MODELOS = ("original", "optimized")
 LIMITE_PP = Fraction(2)
@@ -158,14 +157,16 @@ def errores_relevantes(
 
 
 def referencia_val02(fuente: dict[str, Any]) -> dict[str, str] | None:
-    """Columna `int8_referencia` de VAL-02, solo si es la comparacion de la que salio VAL-03.
+    """Columna `int8_referencia` de la comparacion de la que salio VAL-03 (VAL-02 o el edge).
 
-    No interviene en ninguna metrica: solo da contexto a los errores (kernel entero
-    fusionado contra aritmetica de referencia del grafo).
+    Solo si el archivo es el que registra VAL-03 (SHA-256). No interviene en ninguna
+    metrica: solo da contexto a los errores (kernel entero fusionado contra aritmetica de
+    referencia del grafo).
     """
-    if not COMPARACION.is_file():
+    ruta = RAIZ / fuente["comparacion_csv"]["archivo"]
+    if not ruta.is_file():
         return None
-    datos = COMPARACION.read_bytes()
+    datos = ruta.read_bytes()
     if hashlib.sha256(datos).hexdigest() != fuente["comparacion_csv"]["sha256"]:
         return None
     filas = csv.DictReader(io.StringIO(datos.decode("utf-8")))

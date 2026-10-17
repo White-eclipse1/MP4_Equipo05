@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "tarea": "VAL-03 (#13)",
-  "generado_en": "2026-10-16T03:54:15+00:00",
+  "generado_en": "2026-10-17T01:34:24+00:00",
   "comando": "modelo/.venv/Scripts/python validacion/predicciones_formales.py",
   "verificar": "python validacion/verificar_predicciones.py",
   "archivo": {
     "nombre": "predicciones_val.csv",
-    "sha256": "cece1b077498309b118780e10a014c1830e7151adb1d09523e89e420b7f27a66",
+    "sha256": "08e07c060e29262c854635eabfb04f5df7da9e183e9935b61915dbf04c96ea52",
     "filas": 292,
     "columnas": [
       "sample_id",
@@ -80,22 +80,22 @@
       "sha256": "ba89ee435ce33e0f0cdd4e8ed84dfb50d74e5a3bc23c32af975085306ca02a12",
       "preprocesamiento": "modelo/preprocesar.py (numpy + Pillow)",
       "runtime": "onnxruntime 1.31.0 CPUExecutionProvider, optimizaciones por defecto",
-      "maquina": "AMD Ryzen 5 5625U with Radeon Graphics (Windows AMD64)",
-      "nota": "corrida en la laptop de VAL; VAL-07 (#19) la regenera en el dispositivo, que es la cifra de la rubrica"
+      "maquina": "Raspberry Pi 4 Model B Rev 1.5 (Debian GNU/Linux 13 (trixie) aarch64)",
+      "nota": "INT8 ejecutado en la Raspberry Pi 4 de la demostracion (VAL-07, onnxruntime por defecto): la cifra de la rubrica"
     }
   },
   "fuente": {
     "comparacion_csv": {
-      "archivo": "validacion/resultados/comparacion_val.csv",
-      "sha256": "e3be4f682b56b1f1d6e4fc514567f61b127c6da2c49142ef28a1058549ad8240"
+      "archivo": "validacion/resultados/comparacion_val_edge.csv",
+      "sha256": "8e819dc4417b38c94e33e67929934e761357e6a06bd0396bb8cac506175f0af7"
     },
-    "comparacion_json_generado_en": "2026-10-16T03:32:46+00:00"
+    "comparacion_json_generado_en": "2026-10-17T01:34:13+00:00"
   },
   "resumen": {
     "muestras": 292,
     "aciertos_original": 291,
-    "aciertos_optimizado": 288,
-    "acuerdo_original_optimizado": 287
+    "aciertos_optimizado": 290,
+    "acuerdo_original_optimizado": 291
   },
   "verificacion": {
     "ok": true,
@@ -109,7 +109,7 @@
       {
         "id": "csv.sha256",
         "ok": true,
-        "detalle": "SHA-256 del CSV cece1b077498309b118780e10a014c1830e7151adb1d09523e89e420b7f27a66; declarado cece1b077498309b118780e10a014c1830e7151adb1d09523e89e420b7f27a66"
+        "detalle": "SHA-256 del CSV 08e07c060e29262c854635eabfb04f5df7da9e183e9935b61915dbf04c96ea52; declarado 08e07c060e29262c854635eabfb04f5df7da9e183e9935b61915dbf04c96ea52"
       },
       {
         "id": "manifiesto.vinculo",
@@ -144,7 +144,7 @@
       {
         "id": "resumen.recalculado",
         "ok": true,
-        "detalle": "recalculado {'muestras': 292, 'aciertos_original': 291, 'aciertos_optimizado': 288, 'acuerdo_original_optimizado': 287}; declarado {'muestras': 292, 'aciertos_original': 291, 'aciertos_optimizado': 288, 'acuerdo_original_optimizado': 287}"
+        "detalle": "recalculado {'muestras': 292, 'aciertos_original': 291, 'aciertos_optimizado': 290, 'acuerdo_original_optimizado': 291}; declarado {'muestras': 292, 'aciertos_original': 291, 'aciertos_optimizado': 290, 'acuerdo_original_optimizado': 291}"
       }
     ]
   }
