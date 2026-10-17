@@ -78,7 +78,8 @@ def test_clase_nunca_predicha_da_cero_sin_dividir_entre_cero():
     [
         (100, 98, 100, True, "2"),  # justo en el limite: cumple
         (100, 97, 100, False, "3"),
-        (291, 288, 292, True, "75/73"),  # el caso real: 1.0273... pp
+        (291, 288, 292, True, "75/73"),  # INT8 en la laptop (VAL-02): 1.0273... pp
+        (291, 290, 292, True, "25/73"),  # INT8 en la Raspberry (VAL-07): 0.3424... pp
         # 2.0004 pp: redondeado a 2 decimales seria 2.00 y "cumpliria"; exacto, no cumple.
         (4999, 4899, 4999, False, "10000/4999"),
     ],
@@ -143,6 +144,7 @@ def test_la_evidencia_versionada_se_recalcula_desde_las_predicciones():
         assert recalculado[clave] == evidencia[clave], clave
     tabla = met.tabla_antes_despues(met.calcular(predicciones_reales, metadatos), CLASES)
     assert tabla == met.CSV_SALIDA.read_bytes()
-    assert evidencia["caida_accuracy"]["pp_fraccion"] == "75/73"
+    # INT8 medido en la Raspberry (VAL-07/VAL-08): 291 -> 290 aciertos de 292.
+    assert evidencia["caida_accuracy"]["pp_fraccion"] == "25/73"
     assert evidencia["caida_accuracy"]["cumple"] is True
     assert evidencia["particion"] == "val"

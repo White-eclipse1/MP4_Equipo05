@@ -160,8 +160,8 @@ def calidad(metricas: dict[str, Any]) -> dict[str, Any]:
         "caida_accuracy_pp_fraccion": metricas["caida_accuracy"]["pp_fraccion"],
         "cumple_2pp": metricas["caida_accuracy"]["cumple"],
         "optimizado_medido_en": metricas["fuente"]["optimizado"],
-        "nota": "accuracy del INT8 ejecutado en la laptop de VAL; la de la Raspberry es "
-        "de VAL-07. Con la aritmetica de referencia (VAL-02) la caida es 1 muestra",
+        "nota": "accuracy del INT8 tal como se ejecuto en "
+        f"{metricas['fuente']['optimizado']}, sobre la misma validacion que el original",
     }
 
 

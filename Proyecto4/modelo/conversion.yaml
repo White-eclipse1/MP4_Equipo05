@@ -23,9 +23,10 @@ cuantizacion:
   # Activaciones sin signo (U8S8): es la combinacion que onnxruntime recomienda para CPU.
   # OJO: no se comporta igual en todas las CPU. En VAL-02 el mismo INT8 dio 288/292 con
   # los kernels enteros de onnxruntime en un Ryzen 5 5625U (x86 sin VNNI) y 290/292 con
-  # la aritmetica de referencia del grafo. Hipotesis, aun sin confirmar: saturacion U8S8
-  # en x86 sin VNNI (ver docs/comparacion-modelos.md). La cifra que cuenta es la del
-  # dispositivo (ARM), que se mide en VAL-07.
+  # la aritmetica de referencia del grafo. Hipotesis: saturacion U8S8 en x86 sin VNNI
+  # (ver docs/comparacion-modelos.md). En el dispositivo (Raspberry Pi 4, ARM; VAL-07) el
+  # INT8 coincide con la referencia en 295/295 entradas y acierta 290/292: la diferencia
+  # es del kernel de x86, no del modelo.
   activaciones: QUInt8
   metodo_calibracion: MinMax
 
