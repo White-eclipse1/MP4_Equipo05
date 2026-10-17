@@ -13,11 +13,11 @@
 | Variante optimizada | [`../docs/modelo-optimizado.md`](../docs/modelo-optimizado.md), [`../modelo/registros/registro_conversion.json`](../modelo/registros/registro_conversion.json); archivo en `s3://p4-capturas-474665692638/modelos/clasificador-edge/1.0.0-int8-e05.1/` | ✅ |
 | Comparación de calidad (predicciones por muestra, accuracy y F1) | Predicciones por muestra del original y del INT8 sobre las 292 de `val`: [`../validacion/resultados/predicciones_val.csv`](../validacion/resultados/predicciones_val.csv), verificador [`../validacion/verificar_predicciones.py`](../validacion/verificar_predicciones.py) y [`../docs/comparacion-modelos.md`](../docs/comparacion-modelos.md) (VAL-02, VAL-03); métricas por clase y errores: [`../validacion/resultados/metricas_val.csv`](../validacion/resultados/metricas_val.csv) y [`../docs/metricas-val.md`](../docs/metricas-val.md) (VAL-04); INT8 en la Raspberry con preprocesamiento bit a bit ([`VAL-07/`](VAL-07/)). Paquete recalculable: [`VAL-08/`](VAL-08/) (`python recalcular.py` → `VERIFICADO`) | ✅ |
 | Comparación de recursos (tamaños, más de 100 tiempos tras 10 calentamientos, p50/p95) | Tamaños ✅ en la ficha del modelo. Tiempos ✅ en la Raspberry: 10 calentamientos + 200 mediciones del INT8 y del FP32 en [`VAL-05/`](VAL-05/) y [`../docs/benchmark-edge.md`](../docs/benchmark-edge.md) (VAL-05). p50/p95 y comparación: [`../validacion/resultados/recursos_edge.json`](../validacion/resultados/recursos_edge.json) y [`../docs/recursos-edge.md`](../docs/recursos-edge.md) (VAL-06) | ✅ |
-| Capturas de operación (20 eventos repartidos entre las clases) | 22 capturas con foto, evento e inferencia en la Raspberry ([`EDGE-07/`](EDGE-07/): 11 `cat`, 7 `person`, 4 `dog`); ⏳ enviarlas a AWS y exportarlas desde el portal (`/api/p4/capturas/exportar?formato=csv`) | 🟡 |
+| Capturas de operación (20 eventos repartidos entre las clases) | **24** capturas de `edge01` en S3 y en Capturas Edge (13 `cat`, 7 `person`, 4 `dog`), verificadas contra la Raspberry, con la exportación CSV del portal: [`operacion/`](operacion/) | ✅ |
 | Evidencia de AWS | [`../docs/despliegue.md`](../docs/despliegue.md), [`../docs/acceso-evaluacion.md`](../docs/acceso-evaluacion.md), [`../scripts/consultar_captura.py`](../scripts/consultar_captura.py) | ✅ con capturas de prueba ([`int-03/`](int-03/), [`int-05/`](int-05/)) y con una captura del dispositivo seguida hasta S3 y el portal ([`int-06/`](int-06/)) |
 | Acceso al portal | https://54-80-197-58.sslip.io → Capturas Edge, usuario `evaluador` | ✅ |
-| Demostración funcional | Guion: [`../docs/guion-demo.md`](../docs/guion-demo.md); runbook del dispositivo: [`../docs/edge08-runbook.md`](../docs/edge08-runbook.md) y su ensayo en [`EDGE-08/`](EDGE-08/); ⏳ simulacro del equipo (INT-08) | ⏳ |
-| Video opcional | ⏳ | ⏳ |
+| Demostración funcional | Guion: [`../docs/guion-demo.md`](../docs/guion-demo.md); runbook del dispositivo: [`../docs/edge08-runbook.md`](../docs/edge08-runbook.md) y su ensayo en [`EDGE-08/`](EDGE-08/). Simulacro y reproducción por otro integrante **no realizados**, por decisión del equipo ([`int-08/`](int-08/)) | 🟡 |
+| Video opcional | No se entrega: es opcional en la rúbrica | — |
 
 ## Requisitos mínimos
 
@@ -47,4 +47,5 @@
 | [`EDGE-08/`](EDGE-08/) | EDGE-08 (#23) | Ensayo del runbook: entorno, captura, envío, sin red, reconexión y reinicio |
 | [`VAL-07/`](VAL-07/) | VAL-07 (#19) | Preprocesamiento y predicciones del INT8 en la Raspberry contra la laptop |
 | [`VAL-08/`](VAL-08/) | VAL-08 (#24) | Paquete recalculable de calidad y recursos, con `SHA256SUMS.txt` |
-| `operacion/` | INT-08 | ⏳ Exportación desde el portal de las capturas de operación, ya en AWS |
+| [`operacion/`](operacion/) | INT-08 (#26) | 24 capturas del dispositivo verificadas en S3, captura de pantalla de Capturas Edge y exportación CSV |
+| [`int-08/`](int-08/) | INT-08 (#26) | Criterios del cierre, comprobaciones previas a la entrega y lo no realizado |
