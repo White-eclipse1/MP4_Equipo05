@@ -7,10 +7,13 @@ La integración real se verifica con `enviar.py` y las evidencias de EDGE-06.
 
 ## Dependencias y alcance
 
-El cierre de EDGE-07 requiere EDGE-04, EDGE-06 y VAL-07. Se puede preparar el
-código y ejecutar la serie física mientras VAL-07 está pendiente, pero la serie
-no sustituye esa validación de preprocesamiento. La evidencia física de este
-ticket se incorpora después de ejecutar el protocolo en la Raspberry.
+El cierre de EDGE-07 requiere EDGE-04, EDGE-06 y VAL-07. La serie física de
+operación no sustituye la validación del preprocesamiento ni el envío real
+comprobados en los tickets dependientes.
+
+VAL-07 está integrado en main mediante el PR #47 (`fa51e38`). Su resultado
+documenta el contraste de la Raspberry con la laptop. La rama EDGE-07 incorpora
+esos commits mediante el merge `ce3902f`.
 
 ## Serie de más de cinco minutos
 
@@ -53,6 +56,31 @@ sistema operativo. La nueva sesión debe volver a cargar el modelo con hash
 correcto, conservar config_sha256 y agregar una captura al historial existente.
 
 ## Archivos y verificación
+
+### Fallo físico de cámara y recuperación
+
+Esta prueba complementa la serie continua; no exige repetir las 21 capturas.
+Detener únicamente el servidor de IP Webcam, conservando cable y anclaje USB.
+Con la URL local habitual configurada, ejecutar:
+
+```bash
+python -u app/operacion.py --modelo modelo/model_int8.onnx --url "$CAMERA_URL" --cantidad 2 --intervalo 90 --fase continua --salida evidencias/EDGE-07/fallo-recuperacion
+```
+
+Pulsar Enter con el servidor todavía detenido. Esperar el registro real
+`fallo_captura` del primer intento. Guardar captura de Terminal y volver a iniciar
+el servidor en el teléfono durante la espera de 90 s. Presentar una escena nueva
+de perro, que es la clase solicitada para el segundo intento de esta serie corta.
+La segunda captura debe producir JPEG, evento y `captura_completa` en el mismo
+proceso. Conservar el log y los archivos incluso si el restablecimiento falla.
+
+El resumen esperado es un fallo y una captura completa; el código de salida 1 es
+intencional porque no se completaron los dos intentos. El indicador combinado de
+20 capturas y cinco minutos será false en esta prueba corta; se acredita en la
+serie principal. Para revisar recuperación se exige fallo real seguido de éxito
+con el mismo session_id y PID, no un error generado por un doble de prueba.
+
+### Estructura de archivos
 
 - `operacion.jsonl`: cargas de modelo, session_id, PID, configuración identificada
   por SHA-256, fallos, eventos completos, predicciones y resumen de cada sesión.
@@ -104,6 +132,37 @@ sido correctas. La sesión corta muestra false en el criterio combinado de 20
 capturas/cinco minutos/tres clases; ese requisito lo acredita la sesión continua.
 La corrida no tuvo fallos físicos; la continuidad ante fallo se prueba localmente
 con un doble de cámara y no se presenta como un fallo ocurrido en esta serie.
+
+Las entradas de la serie fueron imágenes mostradas en un monitor y fotografiadas
+físicamente por el teléfono; no sujetos presentes en la escena. La ejecución no
+usa las imágenes fuente como archivos precargados.
+
+### Fallo y recuperación físicos verificados
+
+La evidencia adicional está en
+[`fallo-recuperacion/`](../evidencias/EDGE-07/fallo-recuperacion/). El operador
+detuvo el servidor de IP Webcam y lo restableció durante la espera entre intentos.
+La sesión `9ae1d49a57bc46eb8c9bea5377c63d7f`, PID 2477, registra:
+
+| Hora local UTC−06:00 | Resultado |
+|---|---|
+| 19:25:22 | Modelo cargado, versión y hash correctos |
+| 19:25:27 | Primer intento: fallo_captura, URLError visible |
+| 19:26:57 | Segundo intento: captura e inferencia dog, confianza 0.9327709674835205 |
+| 19:26:57 | Resumen: una captura completa y un fallo, serie de 90.46 s |
+
+La misma sesión, PID y configuración se mantienen entre fallo y recuperación.
+El evento `edge01-64243509029441bebb8637c55f3b02ce` coincide con el historial y
+los bytes del JPEG, cuyo SHA-256 es
+`3b3e0adcaffa9a50cfedf88173920fd0b88a95ce05d80653faef6f8909775519`.
+Se revisaron el JPEG legible, registro de cámara, evento y log originales.
+La captura de Terminal adicional está en
+[`Captura de pantalla 2026-10-16 192854.png`](<../evidencias/EDGE-07/capturas_pantalla/Captura de pantalla 2026-10-16 192854.png>).
+
+Esta prueba corta acredita fallo real y recuperación sin reiniciar el proceso;
+la duración de cinco minutos y el reinicio se acreditan con las dos sesiones
+principales. El intervalo de la prueba de recuperación es 90 s, en vez de los
+16 s de la serie y su reinicio; no se exige igualar sus hashes de configuración.
 
 Prueba local desde Proyecto4, sin cámara ni esperas reales:
 
