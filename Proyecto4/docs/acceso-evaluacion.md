@@ -34,6 +34,12 @@ Muestra:
 4. **La comprobación de la foto:** el SHA-256 recalculado de la foto descargada, comparado con el de S3 y con el `image_sha256` del evento.
 5. **La comprobación de duplicados:** cuántas versiones tiene cada objeto. Una sola versión significa que nunca se sobrescribió y que no hubo duplicados.
 
+6. **Contra el dispositivo** (opcional): con `--evento-local <id>.json --foto-local <id>.jpg`, copias del registro local de la Raspberry, compara los 11 campos del contrato y el SHA-256 de la foto con lo que guardó S3. Los campos propios del dispositivo (`estado`, `width`…) no se comparan. Así se demuestra que la captura que llegó a AWS es la que generó el dispositivo (INT-04, INT-06):
+
+   ```bash
+   python Proyecto4/scripts/consultar_captura.py <capture_id> --profile p4-lectura --evento-local <id>.json --foto-local <id>.jpg
+   ```
+
 Si todo coincide termina en `Resultado: OK`. Se probó el 15 de octubre contra el bucket real con una captura de prueba escrita por el receptor (después borrada). Esa captura reusaba el ID de una prueba anterior, y el paso 5 lo detectó y marcó `REVISAR`, como debe.
 
 Comandos equivalentes con la CLI, si se prefiere no usar el script:
