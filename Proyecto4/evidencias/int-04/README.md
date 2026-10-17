@@ -1,8 +1,36 @@
 # INT-04: idempotencia, fallas y reintento controlado
 
-**Estado: parcial.** La parte del receptor y de AWS ya está probada contra el portal desplegado. La falla de envío y el reintento **desde el dispositivo** se completan cuando el programa de la Raspberry envíe al receptor (EDGE-06), con el [procedimiento](#procedimiento-en-el-dispositivo) de abajo.
+Dos partes: la falla y el reintento **desde la Raspberry** con una captura física, y el comportamiento del receptor desplegado (duplicado, conflicto, sin sobrescritura) con una captura de prueba.
 
-## Lo que ya está probado (receptor desplegado y S3)
+## Falla y reintento desde el dispositivo
+
+**Captura:** `edge01-211538a088644fe19b3f579367d5b2c8` (`cat` 0.9987), tomada por Omar el 16 oct de 2026 a las 16:34:01 (UTC-06:00) y enviada con el programa de EDGE-06. Su recorrido completo está en INT-06.
+
+**Cómo se provocó la falla:** Omar apagó el Wi-Fi (procedimiento reversible: se vuelve a encender, nada se borra ni se reconfigura). [`telefono-sin-wifi-ni-datos.webp`](telefono-sin-wifi-ni-datos.webp): el teléfono, que da la cámara por USB, con Wi-Fi y datos móviles apagados el viernes 16 oct; la foto no muestra la hora, así que la que vale es la del log.
+
+[`envios-edge06.jsonl`](envios-edge06.jsonl) es el log de envíos que escribió la Raspberry, entregado sin editar (manifiesto con SHA-256; `3b0c826b…c4d9`):
+
+| Hora (UTC-06:00) | Resultado | `capture_id` y hashes |
+|---|---|---|
+| 17:24:14 | Sin respuesta: "Error de red o timeout; evento local conservado", reintentable | mismo ID; evento `c3e01eb1…94fe`, foto `2f753f34…1250` |
+| 17:24:18 | Igual (intento 2) | iguales |
+| 17:24:27 | Igual (intento 3) | iguales |
+| 17:26:59 | `201 creado`, `received_at` `2026-10-16T23:26:59.521+00:00` | iguales |
+| 17:28:43 | `200 duplicado`, con el **mismo** `received_at` | iguales |
+
+[`consulta-s3-edge01.txt`](consulta-s3-edge01.txt): en S3 el evento es igual en sus 11 campos al evento local de la Raspberry, la foto es idéntica byte por byte y hay **una sola versión** del registro y de la foto. Ni las 3 fallas ni el reenvío dejaron duplicados.
+
+| Criterio | Evidencia |
+|---|---|
+| Procedimiento reversible para provocar la falla | Apagar el Wi-Fi y volver a encenderlo; el procedimiento repetible está [abajo](#procedimiento-en-el-dispositivo) |
+| La falla queda visible en el dispositivo | El programa registra cada intento fallido con su motivo: 3 líneas de 17:24 en el log |
+| El evento local se conserva | Cada falla dice "evento local conservado", y el mismo evento (`c3e01eb1…`) es el que llegó después a S3 |
+| Al restablecer la conectividad se reintenta | 17:26:59 → `201 creado` |
+| El reintento usa exactamente el mismo `capture_id` | Los 5 intentos llevan el mismo ID y los mismos SHA-256 de evento y foto |
+| AWS contiene un solo registro final y una foto recuperable | Una versión de cada objeto; foto descargada idéntica a la de la Raspberry |
+| Repetir exactamente el evento produce `duplicado` | 17:28:43 → `200 duplicado`, sin cambiar `received_at` |
+
+## Receptor desplegado y S3, con una captura de prueba
 
 Prueba del contrato del 16 oct de 2026, 00:59 (UTC-06:00), contra `https://54-80-197-58.sslip.io/api/p4/capturas`, con [`scripts/enviar_prueba.py`](../../scripts/enviar_prueba.py). Usó la captura de prueba `prueba-int-20261016T005939-0001` (`device_id=prueba-int`, foto sintética).
 
@@ -28,20 +56,9 @@ También lo cubren las pruebas del CI, contra un S3 simulado:
 | `test_sin_red_es_no_disponible`, `test_error_de_s3_al_guardar_es_no_disponible` | Si S3 falla, el receptor responde `503`, que es el caso en que el dispositivo **sí** reintenta (contrato) |
 | `test_permiso_denegado_es_no_disponible_y_no_conflicto` | Un permiso denegado no se confunde con un conflicto |
 
-## Lo que falta: el dispositivo
-
-| Criterio | Cómo se demuestra |
-|---|---|
-| Procedimiento reversible para provocar la falla | Definido abajo: cortar la red de la Raspberry y volver a encenderla. Nada se borra ni se reconfigura |
-| La falla se ve en el dispositivo | Captura de pantalla del programa con el error de red (paso 2) |
-| El evento local se conserva | `ls` y `sha256sum` del JPEG y del JSON locales tras la falla (paso 2) |
-| Al volver la red se puede reintentar | Captura de pantalla con `201 creado` (paso 4) |
-| El reintento usa exactamente el mismo `capture_id` | `consultar_captura.py --evento-local --foto-local` sobre ese ID → `Resultado: OK` (paso 6) |
-| AWS contiene un solo registro y una foto recuperable | La misma consulta: una versión de cada objeto y la foto con el mismo SHA-256 |
-
 ## Procedimiento en el dispositivo
 
-Es el mismo corte de red de EDGE-04. Opera desde el teclado y la pantalla de la Raspberry, **no por SSH**, porque la sesión se corta al apagar el Wi-Fi. El cable USB al teléfono se queda conectado, porque es el enlace con la cámara.
+Para repetir la prueba. Es el mismo corte de red de EDGE-04. Opera desde el teclado y la pantalla de la Raspberry, **no por SSH**, porque la sesión se corta al apagar el Wi-Fi. El cable USB al teléfono se queda conectado, porque es el enlace con la cámara.
 
 **Requisitos:**
 - El programa del dispositivo (EDGE-06) guarda el JPEG y el evento antes de enviar y muestra el código de cada respuesta.
@@ -87,4 +104,4 @@ Guarda en esta carpeta `red-cortada.txt`, `red-restablecida.txt`, las capturas d
 
 ## Sin secretos
 
-`resultado-receptor.json` y `consulta-s3.txt` no contienen el token ni contraseñas. Las capturas de pantalla del dispositivo no deben mostrar el `.env`.
+`resultado-receptor.json`, `envios-edge06.jsonl` y las consultas guardan respuestas, no solicitudes ni cabeceras: no contienen el token ni contraseñas. La foto del teléfono no muestra datos personales.
